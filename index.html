@@ -151,6 +151,33 @@ h3{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:-.
 .seg button{border:none;background:none;padding:5px 12px;border-radius:7px;font-size:13px;font-weight:600;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 
+/* wrong-answer tracking */
+.why{margin-top:12px;padding:14px;border-radius:14px;background:var(--surface-2)}
+.why-h{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.trap{font-size:12px;font-weight:600;color:var(--bad);background:var(--bad-soft);padding:1px 8px;border-radius:980px}
+.why-chips,.vchips{display:flex;flex-wrap:wrap;gap:6px}
+.wchip,.vchip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:980px;padding:6px 12px;font-size:13px;font-weight:500}
+.wchip[aria-pressed="true"],.vchip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+.presc{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.presc-tip{margin:0;font-size:14px}
+.presc-clue{margin:0;font-size:14px;padding:10px 12px;border-radius:10px;background:var(--surface);width:100%}
+.presc-clue b{color:var(--primary);font-size:12px;margin-right:4px}
+.vchips{margin-bottom:4px}
+.btn.sm{padding:8px 14px;font-size:13px}
+.memo{width:100%;margin-top:10px;padding:9px 12px;border:none;border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+.dots{display:inline-flex;gap:3px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--ok)}
+.toplist{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.toplist li{font-size:15px}
+.toplist li span{margin-right:6px}
+.toplist li b{color:var(--bad);font-size:13px}
+.checklist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.checklist li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border-radius:10px;font-size:15px}
+.checklist li::before{content:"";flex:0 0 6px;height:6px;border-radius:50%;background:var(--primary);margin-right:4px}
+.checklist li span{flex:1}
+.ai-out{margin-top:10px;padding:14px;border-radius:12px;background:var(--surface-2);font-size:15px;line-height:1.65}
+
 /* floating AI tutor */
 #fab{position:fixed;right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;align-items:center;gap:8px;
   border:none;background:var(--ink);color:var(--surface);padding:13px 18px;border-radius:980px;font-weight:600;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.08);transition:transform .15s}
@@ -511,7 +538,7 @@ window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(h===
 function go(t){tab=t;try{history.replaceState(null,"","#"+t);}catch(e){}render();window.scrollTo({top:0});}
 
 function renderTabs(){
-  const wc=Object.keys(S.wrong).length;
+  const wc=wnActive().length;
   $("#tabs").innerHTML=TABS.map(([k,n])=>`<button role="tab" aria-selected="${k===tab}" data-tab="${k}">${n}${k==="wrong"&&wc?`<span class="badge num">${wc}</span>`:""}</button>`).join("");
 }
 $("#tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(b)go(b.dataset.tab);});
@@ -519,6 +546,7 @@ $("#tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");i
 function render(){
   $("#dday").textContent=dday();
   renderTabs();
+  migrateWrong();
   if(tab!=="lc"&&LL&&LL.phase!=="review"){clearInterval(LL.timer);stopAudio();LL=null;}
   if(tab!=="lc"&&LL&&LL.replaying){stopAudio();LL.replaying=false;LL.line=-1;}
   ({today:rToday,lc:rLC,p5:rRCtab,voca:rVoca,tips:rTips,wrong:rWrong})[tab]();
@@ -531,12 +559,14 @@ function rToday(){
   const st=S.st,acc=st.n?Math.round(st.c/st.n*100):null,avg=st.n?Math.round(st.sec/st.n):null;
   const known=allWords().filter(w=>S.words[w.w]==="known").length;
   const m=S.mock||{};
+  const dueN=wnDue().length;
   $("#main").innerHTML=`${STANDALONE&&!gkey()?keyBox():""}
+  ${dueN?`<section class="sheet row" style="justify-content:space-between"><div><span class="label">오답 복습</span><h3 style="margin-top:2px">오늘 다시 풀 문제 ${dueN}개</h3></div><button class="btn print" data-tab="wrong">오답노트 열기</button></section>`:""}
   <div class="stats">
     <div><div class="v">${acc==null?"–":acc+"%"}</div><div class="k">Part 5 정답률 (${st.n}문제)</div></div>
     <div><div class="v ${avg>20?"":""}">${avg==null?"–":avg+"초"}</div><div class="k">문제당 평균 (목표 20초)</div></div>
     <div><div class="v">${known}<span class="muted" style="font-size:14px">/${allWords().length}</span></div><div class="k">아는 단어</div></div>
-    <div><div class="v">${Object.keys(S.wrong).length}</div><div class="k">오답노트</div></div>
+    <div><div class="v">${wnActive().length}</div><div class="k">남은 오답</div></div>
   </div>
   <section class="days">
     <div class="row" style="justify-content:space-between"><h2>6일 계획</h2><span class="note"><span class="where here">여기</span> 이 페이지에서 · <span class="where">책/앱</span> 리스닝·모의고사</span></div>
@@ -574,8 +604,8 @@ $("#main").addEventListener("change",e=>{
 
 /* ---------- Part 5 ---------- */
 let P=null; // {list,idx,picked,start,res:[],timer}
-function startP5(list){P={list,idx:0,picked:null,start:Date.now(),res:[]};tick();render();}
-function tick(){clearInterval(window._t);window._t=setInterval(()=>{const el=$("#qtimer");if(!el||!P||P.picked!=null)return;const s=Math.floor((Date.now()-P.start)/1000);el.textContent=s+"초";el.classList.toggle("slow",s>20);},500);}
+function startP5(list,opts){P={list,idx:0,picked:null,start:Date.now(),res:[],limit:(opts&&opts.limit)||0};tick();render();}
+function tick(){clearInterval(window._t);window._t=setInterval(()=>{if(!P||P.picked!=null||P.idx>=P.list.length)return;const s=Math.floor((Date.now()-P.start)/1000);if(P.limit&&s>=P.limit&&tab==="p5"){answer(-1);return;}const el=$("#qtimer");if(!el)return;el.textContent=P.limit?(P.limit-s)+"초 남음":s+"초";el.classList.toggle("slow",P.limit?P.limit-s<=5:s>20);},300);}
 function pickNew(n){
   const qs=allQs(),seen=S.seen||{};
   const unseen=shuffle(qs.filter(q=>!seen[q.id])),rest=shuffle(qs.filter(q=>seen[q.id]));
@@ -591,7 +621,7 @@ function rP5(){
       <p class="muted" style="margin:6px 0 14px">고르면 바로 정답과 해설이 나와요. 틀린 문제는 오답노트에 자동으로 저장돼요. 실전에선 문제당 <b>20초</b>가 목표예요.</p>
       <div class="row">
         <button class="btn print" data-act="p5new">10문제 시작</button>
-        ${Object.keys(S.wrong).length?`<button class="btn ghost" data-act="p5wrong">오답만 다시 (${Object.keys(S.wrong).length})</button>`:""}
+        ${p5WrongIds().length?`<button class="btn ghost" data-act="p5wrong">오답만 다시 (${p5WrongIds().length})</button>`:""}
       </div>
       <p class="note" style="margin:12px 0 0">문제 은행 <span class="num">${qs.length}</span>개 · 아직 안 푼 문제 <span class="num">${left}</span>개</p>
     </section>
@@ -618,7 +648,7 @@ function answer(i){
   S.st.n++;S.st.c+=ok?1:0;S.st.sec+=Math.min(sec,120);
   S.catSt=S.catSt||{};const ck=q.cat||"기타";S.catSt[ck]=S.catSt[ck]||{n:0,c:0};S.catSt[ck].n++;S.catSt[ck].c+=ok?1:0;
   S.seen=S.seen||{};S.seen[q.id]=1;
-  if(ok)delete S.wrong[q.id];else S.wrong[q.id]=(S.wrong[q.id]||0)+1;
+  recordResult("p5:"+q.id,ok,{kind:"p5",part:5,qid:q.id,q:q.q,c:q.c,a:q.a,ex:q.ex,t:q.cat||"기타",pick:i,sec});
   save();render();
 }
 function nextQ(){P.idx++;P.picked=null;P.start=Date.now();render();}
@@ -689,9 +719,10 @@ function p5Review(){
       return `<article class="rv">
         <div class="rv-h"><span class="qno">${i+1}번</span><span class="pill ${r.ok?"ok":"bad"}">${r.ok?"맞음":"틀림"}</span><span class="timer ${r.sec>20?"slow":""}">${r.sec}초</span>${q.cat?`<span class="cat">${esc(q.cat)}</span>`:""}</div>
         <p class="rv-q">${filled}</p>
-        <div class="rv-opts">${q.c.map((o,j)=>`<span class="rv-o ${j===q.a?"right":j===r.pick?"wrong":""}">${L[j]}. ${esc(o)}${j===r.pick&&!r.ok?" · 내 답":""}</span>`).join("")}</div>
+        <div class="rv-opts">${q.c.map((o,j)=>`<span class="rv-o ${j===q.a?"right":j===r.pick?"wrong":""}">${L[j]}. ${esc(o)}${j===r.pick&&!r.ok?" · 내 답":""}</span>`).join("")}${r.pick===-1?'<span class="rv-o wrong">시간 초과</span>':""}</div>
         <p class="rv-ex">${esc(q.ex||"")}</p>
         ${sample?`<button class="link" data-askq="${i}">이 문제 더 물어보기</button>`:""}
+        ${r.ok?"":reasonBlock("p5:"+q.id)}
       </article>`;}).join(""):`<p class="note" style="margin:12px 0 0">해당하는 문제가 없어요.</p>`}
   </section>
   <div class="row"><button class="btn print" data-act="p5new">새 10문제</button><button class="btn ghost" data-act="p5home">처음으로</button></div>`;
@@ -822,6 +853,8 @@ function vAnswer(i){
 /* ---------- tips ---------- */
 function rTips(){
   $("#main").innerHTML=`
+  ${(S.checklist||[]).length?`<section class="sheet"><span class="label">나의 실수 체크리스트</span><ul class="checklist" style="margin-top:8px">${S.checklist.map(t=>`<li><span>${esc(t)}</span></li>`).join("")}</ul></section>`:""}
+  ${S.wnAI?`<section class="sheet"><span class="label">AI 패턴 분석 (오답노트)</span><div class="ai-out" style="margin-top:8px">${mdLite(S.wnAI.text)}</div></section>`:""}
   <p class="muted" style="margin:0">눌러서 펼치세요. 시험 전날 이것만 다시 읽어도 돼요.</p>
   <details class="tip" open><summary>시험장 기본 전략</summary><ul>
     <li><b>빈칸 없이 전부 마킹.</b> 틀려도 감점이 없어요. 모르는 문제는 한 보기로 통일해서 찍으세요.</li>
@@ -864,18 +897,191 @@ function rTips(){
 }
 
 /* ---------- wrong notes ---------- */
+/* ---------- 오답 트래킹 (Part 1~7 공통) ---------- */
+const EXAM_EVE="2026-11-14";
+const RC_REASONS=[["vocab","단어를 몰랐어요"],["grammar","문법 규칙을 몰랐어요"],["slip","알았는데 실수했어요"],["misread","해석을 잘못했어요"],["time","시간에 쫓겼어요"],["guess","찍었어요"]];
+const LC_REASONS=[["unheard","안 들렸어요"],["meaning","들렸는데 뜻을 몰랐어요"],["noprev","문제를 미리 못 읽었어요"],["para","바꿔 말한 걸 못 알아봤어요"],["dwell","앞 문제에 미련이 남았어요"],["guess","찍었어요"]];
+const REASON_LABEL=Object.fromEntries([...RC_REASONS,...LC_REASONS]);
+const REASON_TIP={
+  vocab:"모르는 단어를 단어장에 넣고 오늘 안에 퀴즈로 한 번 더 보세요.",
+  grammar:"유형 팁을 읽고 같은 유형 문제를 몇 개 더 풀어서 규칙을 손에 익히세요.",
+  slip:"아는 걸 틀린 건 습관 문제예요. 다음에 지킬 한 줄을 체크리스트에 적어두세요.",
+  misread:"문장 구조(주어, 동사, 수식어)를 끊어 읽어보세요. 해석이 맞는지 AI 튜터에게 확인해도 좋아요.",
+  time:"정확도보다 속도 문제예요. 시간 제한을 걸고 다시 풀어보세요.",
+  guess:"찍은 문제는 다시 풀기에서 진짜 아는지 확인해요.",
+  unheard:"단서 문장만 여러 번 들으면서 따라 말해보세요(쉐도잉).",
+  meaning:"들린 단어의 뜻을 몰랐던 거예요. 단서 문장 속 단어를 단어장에 넣으세요.",
+  noprev:"음성이 끝나는 순간 다음 세트 문제부터 읽는 리듬을 연습하세요.",
+  para:"정답은 대화 표현을 다른 말로 바꿔서 나와요. 단서 문장과 정답 보기를 나란히 놓고 비교해보세요.",
+  dwell:"놓친 문제는 바로 찍고 다음 문제로. 미련이 다음 세트까지 날려요."
+};
+const SLIP_SUGGEST={5:"빈칸 앞뒤부터 보고, 전치사/접속사는 뒤에 주어+동사가 있는지 확인하기",6:"빈칸 앞 문장과의 흐름부터 확인하기",7:"보기를 고르기 전에 지문에서 단서 문장을 꼭 찾기",1:"사람이 없으면 being p.p.는 지우기",2:"첫 의문사를 듣고, 의문사 질문에 Yes/No 보기는 지우기",3:"질문 키워드를 미리 읽고 그 부분만 기다리기",4:"질문 키워드를 미리 읽고 그 부분만 기다리기"};
+function addDays(k,n){const [y,m,d]=k.split("-").map(Number);const t=new Date(y,m-1,d+n);return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");}
+function nextDue(){const t=todayKey(),tm=addDays(t,1);return t>=EXAM_EVE?t:(tm>EXAM_EVE?EXAM_EVE:tm);}
+function wnAll(){S.wn=S.wn||{};return Object.values(S.wn);}
+function wnActive(){return wnAll().filter(e=>!e.grad);}
+function wnDue(){const t=todayKey();return wnActive().filter(e=>e.due<=t);}
+function p5WrongIds(){return wnActive().filter(e=>e.kind==="p5").map(e=>e.qid);}
+const STOP=new Set("the a an and or but of to in on at for with from by as is are was were be been being it its this that these those will would can could should may might must have has had do does did not no yes your our their his her my me you we they he she them us i if then than so such into about over under after before during until since while because although however also some any all each every other more most very much many which who whom whose what when where why how there here please thank thanks".split(" "));
+function wordCands(e){const src=[e.q,...(e.c||[]),e.clueText||"",e.ctx||""].join(" ");const seen=new Set(),out=[];
+  (src.match(/[A-Za-z][A-Za-z'-]{3,}/g)||[]).forEach(w=>{const k=w.toLowerCase().replace(/'s$/,"");if(!STOP.has(k)&&!seen.has(k)){seen.add(k);out.push(k);}});return out.slice(0,16);}
+function trapOf(e){
+  const pick=e.c&&e.pick>=0?e.c[e.pick]:null,ans=e.c?e.c[e.a]:"";if(pick==null)return e.pick===-1?"시간 초과":"";
+  const words=s=>new Set((String(s).toLowerCase().match(/[a-z]{4,}/g)||[]).filter(w=>!STOP.has(w)));
+  if(e.kind==="p5"){const a=pick.toLowerCase(),b=ans.toLowerCase();if(a.slice(0,4)===b.slice(0,4))return "같은 단어의 다른 형태(품사·시제) 함정";return "";}
+  if(e.part===1&&/\bbeing\b/i.test(pick))return "being p.p. 함정";
+  const src=words(e.part===2?e.q:(e.clueText||e.ctx||"")),pw=words(pick),aw=words(ans);
+  const ov=[...pw].filter(w=>src.has(w)).length,ova=[...aw].filter(w=>src.has(w)).length;
+  if(ov>0&&ov>=ova)return e.part<=4?"들린 단어를 그대로 쓴 함정":"지문 단어를 그대로 쓴 함정";
+  return "";
+}
+function recordResult(key,ok,snap){
+  S.wn=S.wn||{};const e=S.wn[key];
+  if(ok){if(e&&!e.grad){e.streak=(e.streak||0)+1;e.lastAt=Date.now();if(e.streak>=2){e.grad=true;e.gradAt=Date.now();}else e.due=nextDue();}return;}
+  if(e){Object.assign(e,snap,{pick:snap.pick,sec:snap.sec});e.wrongCount=(e.wrongCount||1)+1;e.streak=0;e.grad=false;e.due=nextDue();e.lastAt=Date.now();e.trap=trapOf(e);}
+  else{const n=Object.assign({key,wrongCount:1,streak:0,grad:false,reason:null,memo:"",firstAt:Date.now(),lastAt:Date.now(),due:nextDue()},snap);n.trap=trapOf(n);S.wn[key]=n;}
+}
+function migrateWrong(){
+  if(S.wnMigrated)return;S.wn=S.wn||{};
+  Object.entries(S.wrong||{}).forEach(([id,cnt])=>{const q=allQs().find(x=>x.id===id);if(!q||S.wn["p5:"+id])return;
+    S.wn["p5:"+id]={key:"p5:"+id,kind:"p5",part:5,qid:id,q:q.q,c:q.c,a:q.a,ex:q.ex,t:q.cat||"기타",pick:null,sec:null,wrongCount:cnt||1,streak:0,grad:false,reason:null,memo:"",firstAt:Date.now(),lastAt:Date.now(),due:todayKey(),trap:""};});
+  S.wnMigrated=true;
+}
+function reasonBlock(key){
+  const e=(S.wn||{})[key];if(!e||e.grad)return "";
+  const list=e.kind==="lc"?LC_REASONS:RC_REASONS;
+  return `<div class="why" data-key="${esc(key)}">
+    <div class="why-h">왜 틀렸어요?${e.trap?` <span class="trap">${esc(e.trap)}</span>`:""}</div>
+    <div class="why-chips">${list.map(([k,t])=>`<button type="button" class="wchip" data-reason="${k}" aria-pressed="${e.reason===k}">${t}</button>`).join("")}</div>
+    ${e.reason?presc(e):""}
+    <input class="memo" data-memo="1" placeholder="메모 (선택): 무엇을 헷갈렸는지" value="${esc(e.memo||"")}">
+  </div>`;
+}
+function presc(e){
+  const r=e.reason,tip=`<p class="presc-tip">${esc(REASON_TIP[r]||"")}</p>`;
+  if(r==="vocab"||r==="meaning"||r==="para"){
+    const sel=new Set(e.vsel||[]),c=wordCands(e);
+    return `<div class="presc">${tip}${e.wordsAdded?`<p class="note okc">단어장에 ${e.wordsAdded}개 넣었어요. 단어 탭 퀴즈에 먼저 나와요.</p>`:""}
+      ${r==="para"&&e.clueText?`<p class="presc-clue"><b>단서</b> ${esc(e.clueText)}<br><b>정답</b> ${esc(e.c[e.a])}</p>`:""}
+      <p class="note" style="margin:4px 0 6px">모르는 단어를 눌러서 고르세요</p>
+      <div class="vchips">${c.map(w=>`<button type="button" class="vchip" data-vw="${esc(w)}" aria-pressed="${sel.has(w)}">${esc(w)}</button>`).join("")}</div>
+      <button type="button" class="btn ghost sm" data-wact="addwords" ${sel.size?"":"disabled"}>${e.vbusy?'<span class="spin"></span>뜻 찾는 중…':`단어장에 넣기${sel.size?` (${sel.size})`:""}`}</button></div>`;
+  }
+  if(r==="grammar"){const t=e.kind==="p5"?tipFor(e.t):tipFrom(e.kind==="lc"?LC12_TIPS:RC_TIPS,e.t);
+    return `<div class="presc">${tip}<p class="presc-clue"><b>${esc(e.t||"유형")}</b> ${esc(t)}</p>
+      ${sample?(e.kind==="p5"?`<button type="button" class="btn ghost sm" data-wact="genp5">이 유형 문제 10개 풀기</button>`:e.kind==="rc"?`<button type="button" class="btn ghost sm" data-wact="genrc">Part ${e.part} 새 세트 풀기</button>`:""):""}</div>`;}
+  if(r==="slip"){return `<div class="presc">${tip}<div class="row" style="gap:6px"><input class="memo" data-slip="1" placeholder="${esc(SLIP_SUGGEST[e.part]||"다음엔 이렇게 하기")}" style="flex:1;min-width:0;margin:0"><button type="button" class="btn ghost sm" data-wact="addcheck">체크리스트에 추가</button></div></div>`;}
+  if(r==="time"){return `<div class="presc">${tip}${e.kind==="p5"?`<button type="button" class="btn ghost sm" data-wact="timed">15초 제한으로 다시 풀기</button>`:`<p class="note">${e.part===7?"문제를 먼저 읽고 키워드가 있는 문장만 찾아 읽으세요.":"빈칸 앞뒤로 바로 풀리는 문제부터 끝내세요."}</p>`}</div>`;}
+  if(r==="unheard"){return `<div class="presc">${tip}${HAS_TTS||e.clueText?`<button type="button" class="btn ghost sm" data-wact="hear">${e.part<=2?"문제와 정답 듣기":"단서 문장 듣기"}</button>`:""}${e.clueText?`<p class="presc-clue">${esc(e.clueText)}</p>`:""}</div>`;}
+  return `<div class="presc">${tip}</div>`;
+}
+async function addWordsFromWrong(e){
+  const words=[...(e.vsel||[])];if(!words.length)return;e.vbusy=true;render();
+  let items=words.map(w=>({w,m:"뜻 확인 필요",h:""}));
+  if(sample){try{const o=await sample.json(`다음 영어 단어들의 토익 문맥 한국어 뜻(짧게, 15자 이내)과 토익에 자주 나오는 짧은 영어 표현을 알려줘. 단어: ${words.join(", ")}\n참고 문장: ${e.q} ${e.clueText||""}\nJSON 배열만 출력: [{"w":"단어","m":"뜻","h":"표현"}]`,{modelTier:"quick",cache:false});
+    if(Array.isArray(o))items=words.map(w=>{const f=o.find(x=>x&&String(x.w).toLowerCase()===w);return {w,m:f?String(f.m):"뜻 확인 필요",h:f?String(f.h||""):""};});}catch(_){}}
+  const have=new Set(allWords().map(x=>x.w.toLowerCase()));
+  S.genW=(S.genW||[]).concat(items.filter(x=>!have.has(x.w)));S.words=S.words||{};items.forEach(x=>{S.words[x.w]="weak";});
+  e.wordsAdded=(e.wordsAdded||0)+items.length;e.vsel=[];e.vbusy=false;save();render();
+}
+function hearWrong(e){
+  const set={id:"hear"+e.key,part:e.part,lines:[]};
+  if(e.part===2)set.lines=[{sp:"M",t:e.q},{sp:"W",t:e.c[e.a]}];
+  else if(e.part===1)set.lines=[{sp:"W",t:e.c[e.a]}];
+  else set.lines=[{sp:"N",t:e.clueText||""},{sp:"N",t:e.clueText||""}];
+  unlockAudio();const r=S.rate;S.rate=(S.rate||1)*0.9;speakLines(set,null,()=>{S.rate=r;});
+}
+function wnHandle(ev){
+  const box=ev.target.closest(".why");if(!box)return false;const e=(S.wn||{})[box.dataset.key];if(!e)return true;
+  const rb=ev.target.closest("[data-reason]");if(rb){e.reason=e.reason===rb.dataset.reason?null:rb.dataset.reason;save();render();return true;}
+  const vw=ev.target.closest("[data-vw]");if(vw){const s=new Set(e.vsel||[]);const w=vw.dataset.vw;s.has(w)?s.delete(w):s.add(w);e.vsel=[...s];render();return true;}
+  const wa=ev.target.closest("[data-wact]");if(wa){const a=wa.dataset.wact;
+    if(a==="addwords")addWordsFromWrong(e);
+    else if(a==="genp5"){RS=null;S.rcPart=5;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}P=null;genQ([e.t]);}
+    else if(a==="genrc"){P=null;RS=null;S.rcPart=e.part;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}genRC(e.part);}
+    else if(a==="addcheck"){const inp=box.querySelector("[data-slip]");const v=(inp&&inp.value.trim())||SLIP_SUGGEST[e.part]||"";if(v){S.checklist=S.checklist||[];if(!S.checklist.includes(v))S.checklist.push(v);e.checkAdded=true;save();render();}}
+    else if(a==="timed"){const ids=new Set(wnActive().filter(x=>x.kind==="p5"&&(x.reason==="time"||x.key===e.key)).map(x=>x.qid));const list=allQs().filter(q=>ids.has(q.id));RS=null;S.rcPart=5;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(list,{limit:15});window.scrollTo({top:0});}
+    else if(a==="hear")hearWrong(e);
+    return true;}
+  return ev.type==="click"?false:true;
+}
+document.addEventListener("change",ev=>{const m=ev.target.closest&&ev.target.closest("[data-memo]");if(!m)return;const box=m.closest(".why");const e=box&&(S.wn||{})[box.dataset.key];if(e){e.memo=m.value.slice(0,200);save();}});
+let wnFilter="due",wnAI={busy:false};
+function wnSnapKey(e){return e.kind==="p5"?"p5":e.setId;}
 function rWrong(){
-  const qs=allQs(),ids=Object.keys(S.wrong),list=qs.filter(q=>ids.includes(q.id));
-  $("#main").innerHTML=`<section class="sheet">
-    <div class="row" style="justify-content:space-between"><div><span class="label">오답노트</span><h2 style="margin-top:4px">틀린 문제 <span class="num">${list.length}</span>개</h2></div>
-    ${list.length?`<button class="btn print" data-act="p5wrong">다시 풀기</button>`:""}</div>
-    <p class="note" style="margin:6px 0 0">다시 풀어서 맞히면 노트에서 빠져요.</p>
-    <div class="list" style="margin-top:10px">${list.length?list.map(q=>`<div class="li">
-      <div class="row" style="gap:8px"><span class="cat">${esc(q.cat||"")}</span>${S.wrong[q.id]>1?`<span class="note">${S.wrong[q.id]}번 틀림</span>`:""}</div>
-      <p style="margin:6px 0">${blankify(q.q)}</p>
-      <div style="font-size:14px"><b style="color:var(--ok)">(${L[q.a]}) ${esc(q.c[q.a])}</b> <span class="muted">— ${esc(q.ex||"")}</span></div></div>`).join("")
-      :'<p class="muted">아직 틀린 문제가 없어요. Part 5 탭에서 문제를 풀면 틀린 문제가 여기 쌓여요.</p>'}</div>
+  migrateWrong();
+  const all=wnAll(),act=wnActive(),due=wnDue(),grad=all.filter(e=>e.grad),untag=act.filter(e=>!e.reason);
+  const rc={};all.forEach(e=>{const k=e.reason||"none";rc[k]=(rc[k]||0)+1;});
+  const rcRows=Object.entries(rc).sort((a,b)=>b[1]-a[1]);
+  const combo={};act.filter(e=>e.reason).forEach(e=>{const k=(e.t||"기타")+" × "+REASON_LABEL[e.reason];combo[k]=(combo[k]||0)+1;});
+  const top=Object.entries(combo).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const dueP5=due.filter(e=>e.kind==="p5"),dueSets={};due.filter(e=>e.kind!=="p5").forEach(e=>{dueSets[e.setId]=dueSets[e.setId]||{kind:e.kind,part:e.part,setId:e.setId,n:0};dueSets[e.setId].n++;});
+  const list=(wnFilter==="due"?due:wnFilter==="untag"?untag:wnFilter==="grad"?grad:act).sort((a,b)=>(b.wrongCount||1)-(a.wrongCount||1)||b.lastAt-a.lastAt);
+  const PL={p5:"Part 5",lc:"LC",rc:"RC"};
+  $("#main").innerHTML=`
+  <div class="stats">
+    <div><div class="v">${act.length}</div><div class="k">남은 오답</div></div>
+    <div><div class="v">${due.length}</div><div class="k">오늘 복습할 문제</div></div>
+    <div><div class="v">${grad.length}</div><div class="k">졸업 (2번 연속 정답)</div></div>
+    <div><div class="v ${untag.length?"bad":""}">${untag.length}</div><div class="k">원인 미기록</div></div>
+  </div>
+  <section class="sheet">
+    <h3>오늘 복습</h3>
+    <p class="note" style="margin:4px 0 12px">틀린 문제는 다음 날 다시 나와요. 두 번 연속 맞히면 졸업이에요. 시험 전날(토)에 남은 오답을 한 번 더 돌려요.</p>
+    ${due.length?`<div class="row">${dueP5.length?`<button class="btn print" data-act="wnp5">Part 5 오답 ${dueP5.length}문제 다시 풀기</button>`:""}
+      ${Object.values(dueSets).map(d=>`<button class="btn ghost" data-wnset="${esc(d.kind)}|${esc(d.setId)}">${d.kind==="lc"?"LC":"RC"} Part ${d.part} 세트 다시 (${d.n}문제)</button>`).join("")}</div>`
+      :`<p class="muted" style="margin:0">오늘 복습할 문제가 없어요.${act.length?" 내일 다시 나와요.":""}</p>`}
+  </section>
+  <section class="sheet">
+    <h3>왜 틀렸나</h3>
+    ${all.length?`<div class="catlist">${rcRows.map(([k,v])=>`<div class="catrow"><span>${k==="none"?"원인 미기록":esc(REASON_LABEL[k])}</span><span class="bar"><i style="width:${Math.round(v/all.length*100)}%;background:${k==="none"?"var(--line)":"var(--primary)"}"></i></span><span class="num muted">${Math.round(v/all.length*100)}%</span></div>`).join("")}</div>
+      ${top.length?`<p class="note" style="margin:16px 0 8px">약점 Top 3 (유형 × 원인)</p><ol class="toplist">${top.map(([k,v])=>`<li><span>${esc(k)}</span><b class="num">${v}번</b></li>`).join("")}</ol>`:`<p class="note" style="margin:12px 0 0">아래 오답에서 원인을 고르면 약점 Top 3가 나와요.</p>`}`
+      :`<p class="muted" style="margin:0">아직 오답이 없어요. 문제를 풀고 틀리면 여기에 쌓여요.</p>`}
+  </section>
+  <section class="sheet">
+    <div class="row" style="justify-content:space-between"><h3>AI 패턴 분석</h3>${sample?`<button class="btn ghost sm" data-act="wnai" ${wnAI.busy||!all.length?"disabled":""}>${wnAI.busy?'<span class="spin"></span>분석 중…':S.wnAI?"다시 분석":"분석하기"}</button>`:""}</div>
+    ${S.wnAI?`<div class="ai-out">${mdLite(S.wnAI.text)}</div><p class="note" style="margin:8px 0 0">${new Date(S.wnAI.at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})} 분석</p>`
+      :`<p class="note" style="margin:6px 0 0">${sample?"오답과 원인 기록을 보고 실수 패턴과 시험 전날 볼 주의사항 3줄을 정리해줘요.":"AI 기능이 켜져 있을 때 쓸 수 있어요."}</p>`}
+    ${wnAI.err?`<p class="note bad">${esc(wnAI.err)}</p>`:""}
+  </section>
+  <section class="sheet">
+    <h3>나의 실수 체크리스트</h3>
+    ${(S.checklist||[]).length?`<ul class="checklist">${S.checklist.map((t,i)=>`<li><span>${esc(t)}</span><button class="cp-btn" data-delcheck="${i}" aria-label="삭제">삭제</button></li>`).join("")}</ul>`
+      :`<p class="note" style="margin:6px 0 0">오답 원인으로 '알았는데 실수했어요'를 고르면 여기에 나만의 규칙을 추가할 수 있어요.</p>`}
+  </section>
+  <section class="sheet">
+    <div class="row" style="justify-content:space-between"><h3>오답 목록</h3>
+      <div class="seg">${[["due","오늘 복습"],["all","전체"],["untag","원인 미기록"],["grad","졸업"]].map(([k,t])=>`<button data-wnf="${k}" aria-pressed="${wnFilter===k}">${t}</button>`).join("")}</div></div>
+    ${list.length?list.map(e=>{
+      const head=e.kind==="p5"?"Part 5":e.kind==="lc"?`LC Part ${e.part}`:`RC Part ${e.part}`;
+      const qtext=e.kind==="p5"?esc(e.q).replace(/-{3,}/,`<span class="fill">${esc(e.c[e.a])}</span>`):esc(e.part===1?"사진: "+(e.scene||e.q):e.q||"");
+      return `<article class="rv">
+        <div class="rv-h"><span class="qno">${head}</span><span class="cat">${esc(e.t||"")}</span>${e.wrongCount>1?`<span class="pill bad">${e.wrongCount}번 틀림</span>`:""}
+          <span class="dots" title="연속 정답">${[0,1].map(i=>`<i class="${(e.streak||0)>i?"on":""}"></i>`).join("")}</span>${e.grad?'<span class="pill ok">졸업</span>':`<span class="note">복습 ${e.due<=todayKey()?"오늘":e.due.slice(5).replace("-","/")}</span>`}</div>
+        ${e.ctx?`<p class="note" style="margin:8px 0 0">${esc(e.ctx)}</p>`:""}
+        <p class="rv-q">${qtext}</p>
+        <div class="rv-opts">${(e.c||[]).map((o,j)=>`<span class="rv-o ${j===e.a?"right":j===e.pick?"wrong":""}">${L[j]}. ${esc(o)}${j===e.pick?" · 내 답":""}</span>`).join("")}${e.pick===-1?'<span class="rv-o wrong">시간 초과</span>':""}</div>
+        ${e.clueText&&e.kind!=="p5"?`<p class="presc-clue" style="margin-top:8px"><b>단서</b> ${esc(e.clueText)}</p>`:""}
+        <p class="rv-ex">${esc(e.ex||"")}</p>
+        ${reasonBlock(e.key)}
+        ${e.grad&&e.reason?`<p class="note">원인: ${esc(REASON_LABEL[e.reason])}${e.memo?" · "+esc(e.memo):""}</p>`:""}
+      </article>`;}).join(""):`<p class="note" style="margin:12px 0 0">해당하는 오답이 없어요.</p>`}
   </section>`;
+}
+async function runWnAI(){
+  if(!sample||wnAI.busy)return;wnAI={busy:true};render();
+  const rows=wnAll().slice(-60).map(e=>`- [${e.kind==="p5"?"P5":(e.kind==="lc"?"LC":"RC")+" P"+e.part}] 유형:${e.t||"-"} / 원인:${e.reason?REASON_LABEL[e.reason]:"미기록"} / 함정:${e.trap||"-"} / ${e.wrongCount}번 틀림 / ${e.grad?"졸업":"남음"}${e.memo?" / 메모:"+e.memo:""} / 문제:${(e.q||e.scene||"").slice(0,90)} / 내답:${e.pick>=0&&e.c?e.c[e.pick]:"-"} / 정답:${e.c?e.c[e.a]:""}`).join("\n");
+  const prompt=`토익 시험(2026-11-15)을 앞둔 학생의 오답 기록이야. 목표 700점, 최근 모의고사 150/200(LC 77, RC 73), P4와 P7 후반이 약점.
+${rows}
+${(S.checklist||[]).length?"학생이 만든 실수 체크리스트: "+S.checklist.join(" / "):""}
+
+한국어 해요체로 짧게 써줘:
+**실수 패턴** (가장 중요한 것부터 3개, 각 1~2문장. 유형과 원인을 연결해서 구체적으로)
+**남은 기간 처방** (오늘·내일 할 일 3개)
+**시험 전날 볼 주의사항 3줄** (시험장에서 바로 쓸 수 있는 짧은 규칙)`;
+  try{const r=await sample(prompt,{modelTier:"default",cache:false});S.wnAI={text:r.text,at:Date.now()};wnAI={busy:false};save();}
+  catch(e){wnAI={busy:false,err:errMsg(e).replace("만들","분석하")};}
+  render();
 }
 
 /* ---------- listening (Part 3·4) ---------- */
@@ -1038,6 +1244,8 @@ function startRC(s){if(!s)return;clearInterval(window._rct);RS={set:s,picks:new 
   window._rct=setInterval(()=>{const el=$("#rctimer");if(!el||!RS||RS.phase!=="solve")return;const t=(Date.now()-RS.start)/1000;el.textContent=fmtSec(t)+" / "+fmtSec(rcTarget(RS.set));el.classList.toggle("slow",t>rcTarget(RS.set));},500);}
 function rcSubmit(){if(!RS||RS.phase!=="solve")return;clearInterval(window._rct);RS.sec=Math.round((Date.now()-RS.start)/1000);RS.phase="review";
   const s=RS.set,c=s.qs.filter((q,i)=>RS.picks[i]===q.a).length;S.rcSt=S.rcSt||{};const k="p"+s.part;S.rcSt[k]=S.rcSt[k]||{n:0,c:0,sec:0};S.rcSt[k].n+=s.qs.length;S.rcSt[k].c+=c;S.rcSt[k].sec+=RS.sec;
+  s.qs.forEach((q,qi)=>{let ctx="";if(s.part===6){const body=s.docs[0].body;const sent=body.split(/(?<=[.!?])\s+|\n+/).find(x=>x.includes("["+(qi+1)+"]"));ctx=sent?sent.replace(/\[(\d)\]/g,(m,n)=>+n===qi+1?"_____":"…").trim():"";}
+    recordResult(`rc:${s.id}:${qi}`,RS.picks[qi]===q.a,{kind:"rc",part:s.part,setId:s.id,qi,q:s.part===6?`빈칸 ${qi+1}`:q.q,c:q.c,a:q.a,ex:q.ex,t:q.t||"",clueText:q.clue||"",ctx,pick:RS.picks[qi]==null?null:RS.picks[qi]});});
   S.rcType=S.rcType||{};s.qs.forEach((q,i)=>{const t=q.t||"기타";S.rcType[t]=S.rcType[t]||{n:0,c:0};S.rcType[t].n++;S.rcType[t].c+=RS.picks[i]===q.a?1:0;});
   S.rcSeen=S.rcSeen||{};S.rcSeen[s.id]=1;save();render();window.scrollTo({top:0});}
 function rcSeg(){const rp=S.rcPart||5;return `<div class="seg partseg">${[[5,"Part 5 단문"],[6,"Part 6 장문"],[7,"Part 7 독해"]].map(([p,n])=>`<button data-rcpart="${p}" aria-pressed="${rp===p}">${n}</button>`).join("")}</div>`;}
@@ -1068,7 +1276,7 @@ function rRCset(){
   const qsHtml=s.qs.map((q,qi)=>`<div class="lq"><div class="qt"><span class="qno">${qi+1}.</span> ${s.part===6?`빈칸 ${qi+1}`:esc(q.q)}${rev&&q.t?` <span class="cat">${esc(q.t)}</span>`:""}</div>
     ${q.c.map((o,i)=>{let cls="";if(rev){if(i===q.a)cls="right";else if(i===RS.picks[qi])cls="wrong";}else if(RS.picks[qi]===i)cls="picked";
       return `<button class="opt ${cls}" data-rpick="${qi}-${i}" ${rev?"disabled":""}><span class="bub">${L[i]}</span><span>${esc(o)}</span></button>`;}).join("")}
-    ${rev?`<div class="feedback ${RS.picks[qi]===q.a?"":"no"}" style="margin-top:6px"><b>${RS.picks[qi]===q.a?"정답":RS.picks[qi]==null?"안 고름 · 정답 ("+L[q.a]+")":"정답 ("+L[q.a]+")"}</b>${esc(q.ex||"")}</div>`:""}</div>`).join("");
+    ${rev?`<div class="feedback ${RS.picks[qi]===q.a?"":"no"}" style="margin-top:6px"><b>${RS.picks[qi]===q.a?"정답":RS.picks[qi]==null?"안 고름 · 정답 ("+L[q.a]+")":"정답 ("+L[q.a]+")"}</b>${esc(q.ex||"")}</div>${RS.picks[qi]===q.a?"":reasonBlock(`rc:${s.id}:${qi}`)}`:""}</div>`).join("");
   const marks=rev&&s.part===7?s.qs.map((q,i)=>[q.clue,i+1]).filter(x=>x[0]):[];
   const docs=s.part===6?s.docs.map(d=>`<article class="doc"><span class="doc-type">${esc(d.type||"")}</span>${d.title?`<div class="doc-title">${esc(d.title)}</div>`:""}<div class="doc-body">${p6Body(d,s,rev)}</div></article>`).join("")
     :s.docs.map(d=>docHtml(d,marks)).join("");
@@ -1266,6 +1474,8 @@ function lcReview(){
   if(!LL)return;clearInterval(LL.timer);stopAudio();LL.phase="review";LL.line=-1;
   if(!LL.recorded){LL.recorded=true;const s=LL.set,c=s.qs.filter((q,i)=>LL.picks[i]===q.a).length;
     S.lc=S.lc||{};const k="p"+s.part;S.lc[k]=S.lc[k]||{n:0,c:0};S.lc[k].n+=s.qs.length;S.lc[k].c+=c;
+    s.qs.forEach((q,qi)=>{const POSL=["1번 · 앞부분 단서","2번 · 중간 단서","3번 · 끝부분 단서"];
+      recordResult(`lc:${s.id}:${qi}`,LL.picks[qi]===q.a,{kind:"lc",part:s.part,setId:s.id,qi,q:s.part===1?"":(q.q||""),scene:q.scene||"",c:q.c,a:q.a,ex:q.ex,t:q.t||(s.part>=3?POSL[qi]:""),clueText:s.part>=3&&s.lines&&s.lines[q.clue]?s.lines[q.clue].t:"",pick:LL.picks[qi]==null?null:LL.picks[qi]});});
     S.lcType=S.lcType||{};if(s.part<=2)s.qs.forEach((q,i)=>{const t=q.t||"기타";S.lcType[t]=S.lcType[t]||{n:0,c:0};S.lcType[t].n++;S.lcType[t].c+=LL.picks[i]===q.a?1:0;});
     S.lcPos=S.lcPos||{};if(s.part>=3)s.qs.forEach((q,i)=>{S.lcPos[i]=S.lcPos[i]||{n:0,c:0};S.lcPos[i].n++;S.lcPos[i].c+=LL.picks[i]===q.a?1:0;});
     S.lseen=S.lseen||{};S.lseen[s.id]=1;save();}
@@ -1366,11 +1576,11 @@ function rLC(){
       ${rev&&s.part===2?`<div class="qt" style="font-weight:600">${esc(q.q)}</div>`:""}
       ${rev?q.c.map((o,i)=>`<button class="opt ${i===q.a?"right":i===LL.picks[qi]?"wrong":""}" disabled><span class="bub">${L[i]}</span><span>${esc(o)}</span></button>`).join("")
         :`<div class="lopts">${q.c.map((o,i)=>`<button class="opt mini ${LL.picks[qi]===i?"picked":""}" data-lpick="${qi}-${i}" aria-label="${qi+1}번 ${L[i]}"><span class="bub">${L[i]}</span></button>`).join("")}</div>`}
-      ${rev?`<div class="feedback ${LL.picks[qi]===q.a?"":"no"}" style="margin-top:6px"><b>${LL.picks[qi]===q.a?"정답":LL.picks[qi]==null?"안 고름 · 정답 ("+L[q.a]+")":"정답 ("+L[q.a]+")"}</b>${esc(q.ex||"")}</div>`:""}</div>`).join("")
+      ${rev?`<div class="feedback ${LL.picks[qi]===q.a?"":"no"}" style="margin-top:6px"><b>${LL.picks[qi]===q.a?"정답":LL.picks[qi]==null?"안 고름 · 정답 ("+L[q.a]+")":"정답 ("+L[q.a]+")"}</b>${esc(q.ex||"")}</div>${LL.picks[qi]===q.a?"":reasonBlock(`lc:${s.id}:${qi}`)}`:""}</div>`).join("")
     :s.qs.map((q,qi)=>`<div class="lq"><div class="qt"><span class="qno">${qi+1}.</span> ${esc(q.q)}</div>
       ${q.c.map((o,i)=>{let cls="";if(rev){if(i===q.a)cls="right";else if(i===LL.picks[qi])cls="wrong";}else if(LL.picks[qi]===i)cls="picked";
         return `<button class="opt ${cls}" data-lpick="${qi}-${i}" ${rev?"disabled":""}><span class="bub">${L[i]}</span><span>${esc(o)}</span></button>`;}).join("")}
-      ${rev?`<div class="feedback ${LL.picks[qi]===q.a?"":"no"}" style="margin-top:6px"><b>${LL.picks[qi]===q.a?"정답":LL.picks[qi]==null?"안 고름 · 정답 ("+L[q.a]+")":"정답 ("+L[q.a]+")"}</b>${esc(q.ex||"")}</div>`:""}</div>`).join("")}</div>
+      ${rev?`<div class="feedback ${LL.picks[qi]===q.a?"":"no"}" style="margin-top:6px"><b>${LL.picks[qi]===q.a?"정답":LL.picks[qi]==null?"안 고름 · 정답 ("+L[q.a]+")":"정답 ("+L[q.a]+")"}</b>${esc(q.ex||"")}</div>${LL.picks[qi]===q.a?"":reasonBlock(`lc:${s.id}:${qi}`)}`:""}</div>`).join("")}</div>
   </section>
   ${rev&&s.part<=2?`<div class="row" style="justify-content:space-between">${(HAS_TTS||LL.audio)?(LL.replaying?`<button class="btn ghost" data-act="lcstop">멈추기</button>`:`<button class="btn ghost" data-act="lcreplay">다시 듣기</button>`):""}<span class="row"><button class="btn ghost" data-act="lchome">처음으로</button><button class="btn print" data-act="lc${s.part}">다음 Part ${s.part} 세트</button></span></div>`
   :rev?`<section class="sheet">
@@ -1414,13 +1624,16 @@ let chatDraft="",chatBusy=false,chatCtl=null;
 const CHIPS=["오늘 뭐부터 하면 돼?","내가 자주 틀리는 유형으로 문제 10개 만들어줘","'몰라요' 단어로 예문 만들어줘","Part 2 함정 유형 정리해줘","시제 문제 푸는 순서 알려줘"];
 function progressSummary(){
   const st=S.st,qs=allQs(),cats={};
-  Object.keys(S.wrong).forEach(id=>{const q=qs.find(x=>x.id===id);if(q){const c=q.cat||"기타";cats[c]=(cats[c]||0)+1;}});
+  wnActive().forEach(e=>{const c=(e.kind==="p5"?"P5 ":e.kind==="lc"?"LC P"+e.part+" ":"RC P"+e.part+" ")+(e.t||"기타");cats[c]=(cats[c]||0)+1;});
+  const rsn={};wnAll().forEach(e=>{if(e.reason){rsn[REASON_LABEL[e.reason]]=(rsn[REASON_LABEL[e.reason]]||0)+1;}});
   const weak=allWords().filter(w=>S.words[w.w]==="weak").map(w=>w.w);
   const known=allWords().filter(w=>S.words[w.w]==="known").length;
   const m=S.mock||{},tk=todayKey(),p=PLAN.find(x=>x.d===tk);
   const lines=[
     `Part 5: ${st.n}문제 풀이, 정답률 ${st.n?Math.round(st.c/st.n*100)+"%":"기록 없음"}, 평균 ${st.n?Math.round(st.sec/st.n)+"초":"-"}/문제`,
-    `오답노트 ${Object.keys(S.wrong).length}개` + (Object.keys(cats).length?` (유형별: ${Object.entries(cats).map(([k,v])=>k+" "+v).join(", ")})`:""),
+    `남은 오답 ${wnActive().length}개 (오늘 복습 ${wnDue().length}개)` + (Object.keys(cats).length?` (유형별: ${Object.entries(cats).map(([k,v])=>k+" "+v).join(", ")})`:""),
+    `틀린 원인 기록: ${Object.keys(rsn).length?Object.entries(rsn).map(([k,v])=>k+" "+v).join(", "):"아직 없음"}`,
+    `실수 체크리스트: ${(S.checklist||[]).join(" / ")||"없음"}`,
     `단어: 아는 단어 ${known}개, 몰라요 ${weak.length}개${weak.length?" → "+weak.slice(0,30).join(", "):""}`,
     `모의고사: 1회 LC ${m["1lc"]||"-"} / RC ${m["1rc"]||"-"}, 2회 LC ${m["2lc"]||"-"} / RC ${m["2rc"]||"-"} (각 100문제 중 정답 수)`,
     `앱 기록: LC ${[1,2,3,4].map(p=>{const x=(S.lc||{})['p'+p];return 'P'+p+' '+(x?x.c+'/'+x.n:'-');}).join(', ')} · RC ${[6,7].map(p=>{const x=(S.rcSt||{})['p'+p];return 'P'+p+' '+(x?x.c+'/'+x.n:'-');}).join(', ')}`,
@@ -1583,6 +1796,16 @@ $("#main").addEventListener("keydown",e=>{if(e.target.id==="chatin"&&e.key==="En
 
 /* ---------- actions ---------- */
 $("#main").addEventListener("click",e=>{
+  if(wnHandle(e))return;
+  const tb=e.target.closest("[data-tab]");if(tb){go(tb.dataset.tab);return;}
+  const wf=e.target.closest("[data-wnf]");if(wf){wnFilter=wf.dataset.wnf;render();return;}
+  const dc=e.target.closest("[data-delcheck]");if(dc){S.checklist.splice(+dc.dataset.delcheck,1);save();render();return;}
+  const ws=e.target.closest("[data-wnset]");if(ws){const [k,id]=ws.dataset.wnset.split("|");
+    if(k==="lc"){const st=allSets().find(x=>x.id===id);if(st){tab="lc";try{history.replaceState(null,"","#lc");}catch(_){}startSet(st);}}
+    else{const st=allRC().find(x=>x.id===id);if(st){P=null;S.rcPart=st.part;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startRC(st);}}
+    return;}
+  if(e.target.closest("[data-act='wnp5']")){const list=wnDue().filter(x=>x.kind==="p5").map(x=>({id:x.qid,q:x.q,c:x.c,a:x.a,cat:x.t,ex:x.ex}));RS=null;S.rcPart=5;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(list);window.scrollTo({top:0});return;}
+  if(e.target.closest("[data-act='wnai']")){runWnAI();return;}
   const chip=e.target.closest("[data-chip]");if(chip){sendChat(chip.dataset.chip);return;}
   const ca=e.target.closest("[data-chatact]");if(ca){const [i,j]=ca.dataset.chatact.split("-").map(Number);const a=S.chat[i]&&S.chat[i].acts[j];if(!a)return;
     if(a.type==="p5"){const set=new Set(a.ids);const list=allQs().filter(q=>set.has(q.id));if(list.length){tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(list);window.scrollTo({top:0});}}
@@ -1630,7 +1853,7 @@ $("#main").addEventListener("click",e=>{
   const a=e.target.closest("[data-act]");if(!a)return;
   switch(a.dataset.act){
     case "p5new":if(tab!=="p5"){tab="p5";}startP5(pickNew(10));break;
-    case "p5wrong":{const ids=Object.keys(S.wrong);tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(shuffle(allQs().filter(q=>ids.includes(q.id))).slice(0,10));break;}
+    case "p5wrong":{const ids=p5WrongIds();tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(shuffle(allQs().filter(q=>ids.includes(q.id))).slice(0,10));break;}
     case "p5next":nextQ();break;
     case "p5home":P=null;clearInterval(window._t);render();break;
     case "genq":genQ();break;
