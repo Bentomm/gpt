@@ -149,6 +149,13 @@ h3{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:-.
 
 details.adv{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--surface-2)}
 details.adv summary{cursor:pointer;font-size:14px;font-weight:600}
+/* timed mode */
+.switch{position:relative;flex:0 0 51px;width:51px;height:31px;border:none;border-radius:999px;background:var(--line);padding:0;transition:background .2s}
+.switch i{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
+.switch[aria-checked="true"]{background:var(--ok)}
+.switch[aria-checked="true"] i{transform:translateX(20px)}
+.limitchip{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:980px;padding:2px 10px;font-size:12px;font-weight:600}
+.limitchip.on{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
 /* wrong-answer tracking */
 .why{margin-top:12px;padding:14px;border-radius:14px;background:var(--surface-2)}
 .why-h{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -725,7 +732,16 @@ $("#main").addEventListener("change",e=>{
 
 /* ---------- Part 5 ---------- */
 let P=null; // {list,idx,picked,start,res:[],timer}
-function startP5(list,opts){P={list,idx:0,picked:null,start:Date.now(),res:[],limit:(opts&&opts.limit)||0};tick();render();}
+function timedSec(){return S.timedP5||20;}
+function startP5(list,opts){P={list,idx:0,picked:null,start:Date.now(),res:[],limit:(opts&&opts.limit!=null)?opts.limit:(S.timedOn?timedSec():0)};tick();render();}
+function timedBox(rp){
+  const on=!!S.timedOn,sec=timedSec();
+  return `<section class="sheet timedbox"><div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+      <div><h3>시간 제한 모드</h3><p class="note" style="margin:2px 0 0">${rp===5?`켜면 문제당 ${sec}초가 지나면 자동으로 넘어가요(시간 초과는 오답).`:"켜면 세트 목표 시간이 끝나는 순간 자동으로 채점해요."}</p></div>
+      <button type="button" class="switch" role="switch" aria-checked="${on}" aria-label="시간 제한 모드" data-act="timedtoggle"><i></i></button></div>
+    ${rp===5?`<div class="row" style="margin-top:10px"><span class="note">문제당</span><div class="seg">${[15,20,30].map(v=>`<button data-tsec="${v}" aria-pressed="${sec===v}">${v}초</button>`).join("")}</div></div>`:""}
+  </section>`;
+}
 function tick(){clearInterval(window._t);window._t=setInterval(()=>{if(!P||P.picked!=null||P.idx>=P.list.length)return;const s=Math.floor((Date.now()-P.start)/1000);if(P.limit&&s>=P.limit&&tab==="p5"){answer(-1);return;}const el=$("#qtimer");if(!el)return;el.textContent=P.limit?(P.limit-s)+"초 남음":s+"초";el.classList.toggle("slow",P.limit?P.limit-s<=5:s>20);},300);}
 function pickNew(n){
   const qs=allQs(),seen=S.seen||{};
@@ -746,19 +762,20 @@ function rP5(){
       </div>
       <p class="note" style="margin:12px 0 0">문제 은행 <span class="num">${qs.length}</span>개 · 아직 안 푼 문제 <span class="num">${left}</span>개</p>
     </section>
+    ${timedBox(5)}
     ${genBox("p5")}`;
     return;
   }
   if(P.idx>=P.list.length){p5Review();return;}
   const q=P.list[P.idx],done=P.picked!=null;
   $("#main").innerHTML=`<section class="sheet">
-    <div class="qhead"><span class="qno">${P.idx+1} / ${P.list.length}</span><span class="row" style="gap:8px">${done&&q.cat?`<span class="cat">${esc(q.cat)}</span>`:""}<span class="timer" id="qtimer">${done?P.res[P.res.length-1].sec+"초":"0초"}</span></span></div>
+    <div class="qhead"><span class="qno">${P.idx+1} / ${P.list.length}</span><span class="row" style="gap:8px">${done&&q.cat?`<span class="cat">${esc(q.cat)}</span>`:""}${done?"":`<button type="button" class="limitchip ${P.limit?"on":""}" data-act="p5limit">${P.limit?"제한 "+P.limit+"초":"제한 끔"}</button>`}<span class="timer" id="qtimer">${done?(P.res[P.res.length-1].pick===-1?"시간 초과":P.res[P.res.length-1].sec+"초"):(P.limit?P.limit+"초 남음":"0초")}</span></span></div>
     <div class="progress"><i style="width:${P.idx/P.list.length*100}%"></i></div>
     <p class="qtext">${blankify(q.q)}</p>
     <div class="opts">${q.c.map((o,i)=>{let cls="";if(done){if(i===q.a)cls="right";else if(i===P.picked)cls="wrong";}
       return `<button class="opt ${cls}" data-pick="${i}" ${done?"disabled":""}><span class="bub">${L[i]}</span><span>${esc(o)}</span></button>`;}).join("")}</div>
     ${done?`<div class="feedback ${P.picked===q.a?"":"no"}"><b>${P.picked===q.a?"정답!":"정답은 ("+L[q.a]+") "+esc(q.c[q.a])}</b>${esc(q.ex||"")}</div>
-    <div class="row actbar" style="margin-top:14px;justify-content:space-between"><button class="btn ghost" data-act="p5home">그만하기</button><button class="btn" data-act="p5next" id="nextbtn">${P.idx+1<P.list.length?"다음 문제":"결과 보기"}</button></div>`:`<p class="note" style="margin:12px 0 0">키보드 1–4 또는 A–D로도 고를 수 있어요.</p>`}
+    <div class="row actbar" style="margin-top:14px;justify-content:space-between"><button class="btn ghost" data-act="p5home">그만하기</button><button class="btn" data-act="p5next" id="nextbtn">${P.idx+1<P.list.length?"다음 문제":"결과 보기"}</button></div>`:`<div class="row" style="margin-top:12px;justify-content:space-between"><span class="note">키보드 1–4 또는 A–D로도 고를 수 있어요.</span><button type="button" class="link" data-act="p5home" style="color:var(--muted)">그만하기</button></div>`}
   </section>`;
   if(done)$("#nextbtn")?.focus();
 }
@@ -1389,8 +1406,10 @@ let RS=null,rcGen={busy:false,msg:""};
 function nextRC(part){const seen=S.rcSeen||{},sets=allRC().filter(s=>s.part===part),u=sets.filter(s=>!seen[s.id]);return (u.length?u:shuffle(sets))[0];}
 function rcTarget(s){return s.part===6?120:(s.docs.length>1?80:60)*s.qs.length;}
 function fmtSec(t){t=Math.max(0,Math.round(t));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0");}
-function startRC(s){if(!s)return;clearInterval(window._rct);RS={set:s,picks:new Array(s.qs.length).fill(null),start:Date.now(),phase:"solve"};render();window.scrollTo({top:0});
-  window._rct=setInterval(()=>{const el=$("#rctimer");if(!el||!RS||RS.phase!=="solve")return;const t=(Date.now()-RS.start)/1000;el.textContent=fmtSec(t)+" / "+fmtSec(rcTarget(RS.set));el.classList.toggle("slow",t>rcTarget(RS.set));},500);}
+function startRC(s){if(!s)return;clearInterval(window._rct);RS={set:s,picks:new Array(s.qs.length).fill(null),start:Date.now(),phase:"solve",limitOn:!!S.timedOn};render();window.scrollTo({top:0});
+  window._rct=setInterval(()=>{if(!RS||RS.phase!=="solve")return;const t=(Date.now()-RS.start)/1000,tg=rcTarget(RS.set);
+    if(RS.limitOn&&t>=tg){RS.timeout=true;rcSubmit();return;}
+    const el=$("#rctimer");if(!el)return;el.textContent=RS.limitOn?fmtSec(tg-t)+" 남음":fmtSec(t)+" / "+fmtSec(tg);el.classList.toggle("slow",RS.limitOn?tg-t<=30:t>tg);},500);}
 function rcSubmit(){if(!RS||RS.phase!=="solve")return;clearInterval(window._rct);RS.sec=Math.round((Date.now()-RS.start)/1000);RS.phase="review";
   const s=RS.set,c=s.qs.filter((q,i)=>RS.picks[i]===q.a).length;S.rcSt=S.rcSt||{};const k="p"+s.part;S.rcSt[k]=S.rcSt[k]||{n:0,c:0,sec:0};S.rcSt[k].n+=s.qs.length;S.rcSt[k].c+=c;S.rcSt[k].sec+=RS.sec;
   s.qs.forEach((q,qi)=>{let ctx="";if(s.part===6){const body=s.docs[0].body;const sent=body.replace(/([.!?])\s+/g,"$1\n").split(/\n+/).find(x=>x.includes("["+(qi+1)+"]"));ctx=sent?sent.replace(/\[(\d)\]/g,(m,n)=>+n===qi+1?"_____":"…").trim():"";}
@@ -1412,7 +1431,7 @@ function p6Body(d,s,rev){
 }
 function rRCidle(rp){
   const st=(S.rcSt||{})["p"+rp]||{n:0,c:0,sec:0},seen=S.rcSeen||{},left=allRC().filter(s=>s.part===rp&&!seen[s.id]).length;
-  $("#main").innerHTML=`${rcSeg()}<section class="sheet">
+  $("#main").innerHTML=`${rcSeg()}${timedBox(rp)}<section class="sheet">
     <span class="label">RC · Part ${rp}</span>
     <h2 style="margin-top:4px">${rp===6?"장문 빈칸 채우기":"독해"}</h2>
     <p class="muted" style="margin:6px 0 14px">${rp===6?"지문 하나에 빈칸 4개(문장 넣기 포함). 실전 목표는 한 세트 2분이에요.":"지문을 읽고 문제를 풀어요. 실전 목표는 문제당 1분, 두 지문 세트는 조금 더 줘요. 문제를 먼저 읽고 지문에서 단서를 찾으세요."}</p>
@@ -1449,7 +1468,7 @@ function rRCset(){
     </section>`;
   }
   $("#main").innerHTML=`${summary}<section class="sheet">
-    <div class="qhead"><span class="label">Part ${s.part} · ${s.part===6?"장문 빈칸":s.docs.length>1?"두 지문":"단일 지문"}</span>${rev?"":`<span class="timer" id="rctimer">0:00 / ${fmtSec(rcTarget(s))}</span>`}</div>
+    <div class="qhead"><span class="label">Part ${s.part} · ${s.part===6?"장문 빈칸":s.docs.length>1?"두 지문":"단일 지문"}</span>${rev?(RS.timeout?`<span class="pill bad">시간 종료 · 자동 채점</span>`:""):`<span class="row" style="gap:8px"><button type="button" class="limitchip ${RS.limitOn?"on":""}" data-act="rclimit">${RS.limitOn?"제한 켬":"제한 끔"}</button><span class="timer" id="rctimer">${RS.limitOn?fmtSec(rcTarget(s))+" 남음":"0:00 / "+fmtSec(rcTarget(s))}</span></span>`}</div>
     <div class="docs">${docs}</div>
   </section>
   <section class="sheet">${qsHtml}
@@ -1997,6 +2016,10 @@ $("#main").addEventListener("click",e=>{
   const ra=e.target.closest("[data-act^='rc']");if(ra){const a=ra.dataset.act;
     if(a==="rcstart")startRC(nextRC(S.rcPart||6));else if(a==="rcgen")genRC(S.rcPart||6);else if(a==="rcsubmit")rcSubmit();else if(a==="rchome"){clearInterval(window._rct);RS=null;render();}
     return;}
+  if(e.target.closest("[data-act='timedtoggle']")){S.timedOn=!S.timedOn;save();render();return;}
+  const tsb=e.target.closest("[data-tsec]");if(tsb){S.timedP5=+tsb.dataset.tsec;save();render();return;}
+  if(e.target.closest("[data-act='p5limit']")&&P&&P.picked==null){P.limit=P.limit?0:timedSec();P.start=Date.now();render();return;}
+  if(e.target.closest("[data-act='rclimit']")&&RS&&RS.phase==="solve"){RS.limitOn=!RS.limitOn;if(RS.limitOn&&(Date.now()-RS.start)/1000>=rcTarget(RS.set)-10)RS.start=Date.now()-Math.max(0,(rcTarget(RS.set)-60))*1000;render();return;}
   const acb=e.target.closest("[data-acc]");if(acb){S.accentMode=acb.dataset.acc;save();render();return;}
   if(e.target.closest("[data-act='audclear']")){Promise.all([...AUD].map(id=>delAudio(id))).then(()=>{S.audMeta={};save();render();});return;}
   const rt=e.target.closest("[data-rate]");if(rt){S.rate=+rt.dataset.rate;save();render();return;}
