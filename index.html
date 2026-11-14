@@ -151,6 +151,8 @@ h3{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:-.
 .seg button{border:none;background:none;padding:5px 12px;border-radius:7px;font-size:13px;font-weight:600;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 
+details.adv{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--surface-2)}
+details.adv summary{cursor:pointer;font-size:14px;font-weight:600}
 /* wrong-answer tracking */
 .why{margin-top:12px;padding:14px;border-radius:14px;background:var(--surface-2)}
 .why-h{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -458,26 +460,41 @@ const SILENT_URL=URL.createObjectURL(pcmToWav(new Uint8Array(4800)));
 const GV_M=["Charon","Puck","Fenrir","Orus","Iapetus","Algenib","Alnilam"],GV_W=["Kore","Aoede","Leda","Zephyr","Callirrhoe","Autonoe","Despina"];
 function hashId(id){let h=0;for(const ch of String(id))h=(h*31+ch.charCodeAt(0))|0;return Math.abs(h);}
 const ttsPending={};
+const ACC_EN={us:"a standard American",uk:"a British",au:"an Australian",ca:"a Canadian"},ACC_KO={us:"미국",uk:"영국",au:"호주",ca:"캐나다"};
+const ACC_LANG={us:/en[-_]US/i,uk:/en[-_]GB/i,au:/en[-_]AU/i,ca:/en[-_]CA/i};
+const TTS_MODELS=[["gemini-3.1-flash-tts-preview","old",true,"발음 지시 O"],["gemini-2.5-flash-preview-tts","old",true,"발음 지시 O"],["gemini-3.8-flash-tts","new",false,"최신, 대화는 발음 지시 X"],["gemini-3.8-flash-lite-tts","new",false,"가벼움, 대화는 발음 지시 X"]];
+function setAccents(set,persist=true){
+  S.audMeta=S.audMeta||{};let m=S.audMeta[set.id];if(m&&m.accM)return m;
+  const mode=S.accentMode||"mix";let accM,accW;
+  if(mode==="mix"){const sh=shuffle(["us","uk","au","ca"]);accM=sh[0];accW=sh[1];}else accM=accW=mode;
+  m={accM,accW};if(persist){S.audMeta[set.id]=m;save();}return m;
+}
+function accLabel(set){const m=(S.audMeta||{})[set.id];if(!m||!m.accM)return "";if(m.accOk===false)return "발음: 미국식(모델 제한)";
+  if(set.part===4){const male=m.narrM;return "발음: "+ACC_KO[male?m.accM:m.accW];}
+  return m.accM===m.accW?"발음: "+ACC_KO[m.accM]:`발음: 남 ${ACC_KO[m.accM]} · 여 ${ACC_KO[m.accW]}`;}
 function geminiTTS(set){
   if(ttsPending[set.id])return ttsPending[set.id];
-  const h=hashId(set.id),vm=GV_M[h%GV_M.length],vw=GV_W[(h>>3)%GV_W.length];
+  const h=hashId(set.id),vm=S.gvM||GV_M[h%GV_M.length],vw=S.gvW||GV_W[(h>>3)%GV_W.length];
+  const m=setAccents(set),narrM=!(h%2),narrAcc=narrM?m.accM:m.accW;
   const multi={multiSpeakerVoiceConfig:{speakerVoiceConfigs:[
         {speaker:"Man",voiceConfig:{prebuiltVoiceConfig:{voiceName:vm}}},{speaker:"Woman",voiceConfig:{prebuiltVoiceConfig:{voiceName:vw}}}]}};
+  const kind=set.part===1?"photo description statements":set.part===2?"question and responses":"conversation";
   const bodyFor=fmt=>set.part!==4
     ?(fmt==="new"
       ?{contents:[{role:"user",parts:set.lines.map(l=>({text:l.t,speechMetadata:{speaker:l.sp==="M"?"Man":"Woman"}}))}],generationConfig:{responseModalities:["AUDIO"],speechConfig:multi}}
-      :{contents:[{role:"user",parts:[{text:"TTS the following TOEIC listening conversation between Man and Woman, natural exam pace:\n"+set.lines.map(l=>(l.sp==="M"?"Man: ":"Woman: ")+l.t).join("\n")}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:multi}})
-    :{contents:[{role:"user",parts:[{text:set.lines.map(l=>l.t).join(" ")}]}],
-      generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:(h%2?vw:vm)}}}}};
-  /* 무료 사용량은 모델마다 따로라서, 막히면 다음 모델로 */
-  const CHAIN=[["gemini-3.8-flash-tts","new"],["gemini-3.8-flash-lite-tts","new"],["gemini-3.1-flash-tts-preview","old"],["gemini-2.5-flash-preview-tts","old"]];
-  const tryChain=async()=>{let err;for(const [m,f] of CHAIN){try{return await gfetch(m,bodyFor(f));}catch(e){err=e;if(e.code==="bad_key")throw e;}}throw err;};
+      :{contents:[{role:"user",parts:[{text:`TTS the following TOEIC listening ${kind}. The Man speaks with ${ACC_EN[m.accM]} English accent. The Woman speaks with ${ACC_EN[m.accW]} English accent. Clear, natural exam pace.\n`+set.lines.map(l=>(l.sp==="M"?"Man: ":"Woman: ")+l.t).join("\n")}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:multi}})
+    :{contents:[{role:"user",parts:[{text:`Read the following TOEIC listening talk aloud in ${ACC_EN[narrAcc]} English accent, clear and natural exam pace:\n\n`+set.lines.map(l=>l.t).join(" ")}]}],
+      generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:(narrM?vm:vw)}}}}};
+  /* 무료 사용량은 모델마다 따로라서, 막히면 다음 모델로. 대화는 발음 지시를 따르는 모델을 먼저 */
+  let chain=set.part===4?[TTS_MODELS[2],TTS_MODELS[3],TTS_MODELS[0],TTS_MODELS[1]]:TTS_MODELS.slice();
+  if(S.ttsModel){const f=chain.find(x=>x[0]===S.ttsModel);if(f)chain=[f,...chain.filter(x=>x!==f)];}
+  const tryChain=async()=>{let err;for(const c of chain){const fmt=set.part===4?"single":c[1];try{const d=await gfetch(c[0],bodyFor(fmt));m.model=c[0];m.accOk=set.part===4||c[2];m.narrM=narrM;return d;}catch(e){err=e;if(e.code==="bad_key")throw e;}}throw err;};
   const p=tryChain().then(async d=>{
     const parts=(d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)||[];
     const chunks=parts.filter(x=>x.inlineData).map(x=>Uint8Array.from(atob(x.inlineData.data),c=>c.charCodeAt(0)));
     if(!chunks.length)throw {code:"error",message:"no audio"};
     const all=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));let o=0;chunks.forEach(c=>{all.set(c,o);o+=c.length;});
-    await putAudio(set.id,pcmToWav(all));return true;
+    await putAudio(set.id,pcmToWav(all));S.audMeta[set.id]=m;save();return true;
   }).finally(()=>{delete ttsPending[set.id];});
   ttsPending[set.id]=p;return p;
 }
@@ -597,6 +614,7 @@ $("#main").addEventListener("change",e=>{
   const au=e.target.dataset.aud;if(au){const f=e.target.files&&e.target.files[0];if(!f)return;
     if(!/^audio\//.test(f.type)&&!/\.(wav|mp3|m4a|ogg|aac)$/i.test(f.name)){audMsg="음성 파일(wav, mp3 등)만 넣을 수 있어요.";render();return;}
     putAudio(au,f).then(()=>{const s=allSets().find(x=>x.id===au);audMsg=(s?setLabel(s):"세트")+"에 Google 음성을 넣었어요.";copyBox=null;render();}).catch(()=>{audMsg="저장하지 못했어요. 브라우저 저장 공간이나 시크릿 모드를 확인해주세요.";render();});return;}
+  const go2=e.target.dataset&&e.target.dataset.gopt;if(go2){S[go2]=e.target.value||"";save();return;}
   const vk=e.target.dataset.voice;if(vk){S["voice"+vk]=e.target.value;VO=null;save();voiceTest();return;}
   const c=e.target.dataset.check;if(c){S.checks[c]=e.target.checked;save();}
   const mk=e.target.dataset.mock;if(mk){S.mock=S.mock||{};S.mock[mk]=e.target.value.replace(/\D/g,"").slice(0,3);save();render();}
@@ -1411,13 +1429,17 @@ function unlockAudio(){try{const u=new SpeechSynthesisUtterance(" ");u.volume=0;
 async function speakLines(set,onLine,onDone){
   stopAudio();const my=++playToken;const vo=await pickVoices();
   const narr=(parseInt(String(set.id).replace(/\D/g,""),10)||0)%2?vo.W:vo.M;
+  let accV={M:null,W:null};
+  if(!/^(t0|hear)/.test(String(set.id))&&(S.accentMode||"mix")!=="us"){const m=setAccents(set,!!set.qs);const all=(await englishVoices()).filter(v=>voiceScore(v)>-1000);
+    const pick=(acc,fem)=>{const pool=all.filter(v=>ACC_LANG[acc].test(v.lang));return pool.find(v=>fem?FEM.test(v.name):!FEM.test(v.name))||pool[0]||null;};
+    if(!S.voiceM)accV.M=pick(m.accM,false);if(!S.voiceW)accV.W=pick(m.accW,true);}
   let i=0;
   const next=()=>{
     if(my!==playToken)return;
     if(i>=set.lines.length){onDone&&onDone();return;}
     const ln=set.lines[i],idx=i++;
     const u=new SpeechSynthesisUtterance(ln.t);u.lang="en-US";u.rate=S.rate||1;
-    const v=ln.sp==="M"?vo.M:ln.sp==="W"?vo.W:narr;if(v)u.voice=v;
+    const v=ln.sp==="M"?(accV.M||vo.M):ln.sp==="W"?(accV.W||vo.W):(narr===vo.W?(accV.W||narr):(accV.M||narr));if(v){u.voice=v;u.lang=v.lang;}
     if(vo.same&&ln.sp!=="N")u.pitch=ln.sp==="M"?0.75:1.25;
     let ended=false;const fin=()=>{if(ended||my!==playToken)return;ended=true;clearTimeout(watchT);setTimeout(next,ln.sp==="N"?250:450);};
     u.onstart=()=>{if(my===playToken)onLine&&onLine(idx);};
@@ -1534,6 +1556,17 @@ function rLC(){
         <label for="voiceW" class="note">여자 / 화자</label><select id="voiceW" data-voice="W" style="max-width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)"><option>불러오는 중…</option></select>
         <label for="voiceM" class="note">남자</label><select id="voiceM" data-voice="M" style="max-width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)"><option>불러오는 중…</option></select>
       </div>`:""}
+      <div class="row" style="margin-top:12px"><span class="note" style="min-width:3em">발음</span><div class="seg">${[["mix","무작위 섞기"],["us","미국"],["uk","영국"],["au","호주"],["ca","캐나다"]].map(([k,n])=>`<button data-acc="${k}" aria-pressed="${(S.accentMode||"mix")===k}">${n}</button>`).join("")}</div></div>
+      <p class="note" style="margin:6px 0 0">실제 토익처럼 세트마다 미국·영국·호주·캐나다 발음을 섞어요.</p>
+      ${STANDALONE?`<details class="adv"><summary>Google 음성 고급 설정</summary>
+        <div class="mock" style="grid-template-columns:auto minmax(0,1fr);margin-top:10px">
+          <label for="ttsmodel" class="note">음성 모델</label><select id="ttsmodel" data-gopt="ttsModel"><option value="">자동 (추천)</option>${TTS_MODELS.map(([m,,,d])=>`<option value="${m}" ${S.ttsModel===m?"selected":""}>${m} · ${d}</option>`).join("")}</select>
+          <label for="gvm" class="note">남자 목소리</label><select id="gvm" data-gopt="gvM"><option value="">자동 (세트마다 다르게)</option>${GV_M.map(v=>`<option ${S.gvM===v?"selected":""}>${v}</option>`).join("")}</select>
+          <label for="gvw" class="note">여자 목소리</label><select id="gvw" data-gopt="gvW"><option value="">자동 (세트마다 다르게)</option>${GV_W.map(v=>`<option ${S.gvW===v?"selected":""}>${v}</option>`).join("")}</select>
+        </div>
+        <p class="note" style="margin:8px 0 0">자동이면 무료 사용량이 막힐 때 다음 모델로 넘어가요. 바꾼 설정은 새로 만드는 음성부터 적용돼요.</p>
+        <button class="btn ghost sm" style="margin-top:8px" data-act="audclear">저장된 Google 음성 지우기 (${AUD.size}개)</button>
+      </details>`:""}
       <div class="row" style="margin-top:10px"><span class="note">속도</span><div class="seg">${[[0.85,"느리게"],[1,"보통"],[1.15,"빠르게"]].map(([v,n])=>`<button data-rate="${v}" aria-pressed="${rate===v}">${n}</button>`).join("")}</div></div>
       <p class="note" style="margin:10px 0 0">★ 표시가 자연스러운 고품질 음성이에요. 이름에 Natural, Premium, Enhanced, Google이 들어간 목소리가 좋아요. ★가 하나도 없으면 아래 방법으로 좋은 음성을 받을 수 있어요.</p>
       <ul class="note" style="margin:6px 0 0;padding-left:18px">
@@ -1549,7 +1582,7 @@ function rLC(){
   const phaseBox=ph==="loading"?`<div class="phase"><span class="spin"></span><span><b>Google 음성 만드는 중…</b> 보통 5~20초 걸려요. 그동안 문제를 미리 읽어두세요.</span></div>`
     :ph==="preview"?(LL.ttsErr?`<p class="note" style="margin:10px 0 0;color:var(--bad)">${esc(LL.ttsErr)}</p>`:"")+`<div class="phase"><span class="count" id="lccount">${LL.t}</span><span><b>문제 미리 읽기.</b> 키워드에 집중하세요. 끝나면 음성이 시작돼요.</span><button class="btn ghost" style="margin-left:auto;padding:6px 12px;font-size:13px" data-act="lcplay">바로 듣기</button></div>`
     :ph==="play"&&LL.blocked?`<div class="phase"><span><b>재생이 막혔어요.</b> 눌러서 시작하세요.</span><button class="btn print" style="margin-left:auto;padding:6px 12px;font-size:13px" data-act="lcresume">재생</button></div>`
-    :ph==="play"?`<div class="phase"><span class="eq"><i></i><i></i><i></i><i></i></span><span><b>듣는 중</b>${LL.audio?' <span class="muted">· Google 음성</span>':' <span class="num muted" id="lcprog"></span>'} · 단서가 들리면 바로 고르세요</span><button class="btn ghost" style="margin-left:auto;padding:6px 12px;font-size:13px" data-act="lcskip">채점하기</button></div>`
+    :ph==="play"?`<div class="phase"><span class="eq"><i></i><i></i><i></i><i></i></span><span><b>듣는 중</b>${LL.audio?` <span class="muted">· Google 음성${accLabel(s)?" · "+accLabel(s):""}</span>`:' <span class="num muted" id="lcprog"></span>'} · 단서가 들리면 바로 고르세요</span><button class="btn ghost" style="margin-left:auto;padding:6px 12px;font-size:13px" data-act="lcskip">채점하기</button></div>`
     :ph==="answer"?`<div class="phase"><span class="count" id="lccount">${LL.t}</span><span><b>마무리.</b> 못 고른 문제는 찍으세요.</span><button class="btn ghost" style="margin-left:auto;padding:6px 12px;font-size:13px" data-act="lcskip">채점하기</button></div>`:"";
   const c=rev?s.qs.filter((q,i)=>LL.picks[i]===q.a).length:0;
   const POS=["1번 · 앞부분","2번 · 중간","3번 · 끝부분"],POSD=["주제·목적·장소·화자","세부 내용·문제점·이유","다음 할 일·요청·제안"];
@@ -1831,6 +1864,8 @@ $("#main").addEventListener("click",e=>{
   const ra=e.target.closest("[data-act^='rc']");if(ra){const a=ra.dataset.act;
     if(a==="rcstart")startRC(nextRC(S.rcPart||6));else if(a==="rcgen")genRC(S.rcPart||6);else if(a==="rcsubmit")rcSubmit();else if(a==="rchome"){clearInterval(window._rct);RS=null;render();}
     return;}
+  const acb=e.target.closest("[data-acc]");if(acb){S.accentMode=acb.dataset.acc;save();render();return;}
+  if(e.target.closest("[data-act='audclear']")){Promise.all([...AUD].map(id=>delAudio(id))).then(()=>{S.audMeta={};save();render();});return;}
   const rt=e.target.closest("[data-rate]");if(rt){S.rate=+rt.dataset.rate;save();render();return;}
   const la=e.target.closest("[data-act^='lc'],[data-act^='lgen']");
   if(la){const a=la.dataset.act;
