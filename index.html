@@ -162,6 +162,9 @@ details.adv summary{cursor:pointer;font-size:14px;font-weight:600}
 .wchip[aria-pressed="true"],.vchip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
 .presc{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .presc-tip{margin:0;font-size:14px}
+.ai-why{width:100%;padding:12px 14px;border-radius:12px;background:var(--surface);font-size:15px;line-height:1.6;display:flex;flex-direction:column;gap:8px}
+.ai-why p{margin:0}
+.ai-why b{display:block;font-size:12px;color:var(--primary);margin-bottom:2px}
 .presc-clue{margin:0;font-size:14px;padding:10px 12px;border-radius:10px;background:var(--surface);width:100%}
 .presc-clue b{color:var(--primary);font-size:12px;margin-right:4px}
 .vchips{margin-bottom:4px}
@@ -391,7 +394,9 @@ let S=fresh();
 try{const raw=localStorage.getItem(LS);if(raw)S=Object.assign(fresh(),JSON.parse(raw));}catch(e){}
 let docRef=null,saveTimer=null,writing=Promise.resolve();
 function save(){
+  S.updatedAt=Date.now();
   try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}
+  if(typeof gistSchedule==="function")gistSchedule();
   if(!docRef)return;
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{const snap=JSON.parse(JSON.stringify(S));writing=writing.then(()=>docRef.set(snap)).catch(()=>{});},700);
@@ -523,6 +528,90 @@ async function saveKey(v){
   render();
 }
 if(STANDALONE&&gkey())sample=makeGeminiSample();
+/* ---------- GitHub Gist 자동 동기화 (독립 실행 모드) ---------- */
+const GH_TOK="toeic700-ghtok",GH_GIST="toeic700-gist",GH_FILE="toeic700-progress.json";
+const gh={state:"off",msg:"",at:0,timer:null,busy:false};
+function ghTok(){try{return localStorage.getItem(GH_TOK)||"";}catch(e){return "";}}
+function ghGist(){try{return localStorage.getItem(GH_GIST)||"";}catch(e){return "";}}
+async function ghApi(path,opts={}){
+  const r=await fetch("https://api.github.com"+path,Object.assign({},opts,{headers:Object.assign({"Accept":"application/vnd.github+json","Authorization":"Bearer "+ghTok(),"X-GitHub-Api-Version":"2022-11-28"},opts.body?{"Content-Type":"application/json"}:{})}));
+  if(r.status===401||r.status===403){const t=await r.text().catch(()=>"");throw {code:"gh_auth",message:t};}
+  if(!r.ok)throw {code:"gh_http",status:r.status};
+  return r.status===204?null:r.json();
+}
+function syncPayload(){const c=JSON.parse(JSON.stringify(S));return JSON.stringify({v:1,savedAt:Date.now(),state:c});}
+function unionBy(a,b,key){const m=new Map();(a||[]).forEach(x=>m.set(x[key],x));(b||[]).forEach(x=>{if(!m.has(x[key]))m.set(x[key],x);});return [...m.values()];}
+function mergeState(local,remote){
+  const newer=(remote.updatedAt||0)>(local.updatedAt||0)?remote:local,older=newer===remote?local:remote;
+  const out=Object.assign(fresh(),JSON.parse(JSON.stringify(older)),JSON.parse(JSON.stringify(newer)));
+  const wn=Object.assign({},older.wn||{});Object.entries(newer.wn||{}).forEach(([k,e])=>{if(!wn[k]||(e.lastAt||0)>=(wn[k].lastAt||0))wn[k]=e;});out.wn=wn;
+  out.words=Object.assign({},older.words||{},newer.words||{});
+  out.checks=Object.assign({},older.checks||{},newer.checks||{});
+  ["seen","lseen","rcSeen"].forEach(k=>{out[k]=Object.assign({},older[k]||{},newer[k]||{});});
+  out.checklist=[...new Set([...(older.checklist||[]),...(newer.checklist||[])])];
+  out.gen=unionBy(newer.gen,older.gen,"id");out.genL=unionBy(newer.genL,older.genL,"id");out.genRC=unionBy(newer.genRC,older.genRC,"id");out.genW=unionBy(newer.genW,older.genW,"w");
+  out.updatedAt=Math.max(local.updatedAt||0,remote.updatedAt||0);
+  return out;
+}
+async function gistFindOrCreate(){
+  let id=ghGist();
+  if(id){try{await ghApi("/gists/"+id);return id;}catch(e){if(e.code==="gh_auth")throw e;id="";}}
+  for(let page=1;page<=3&&!id;page++){const list=await ghApi(`/gists?per_page=100&page=${page}`);if(!list||!list.length)break;const f=list.find(g=>g.files&&g.files[GH_FILE]);if(f)id=f.id;}
+  if(!id){const g=await ghApi("/gists",{method:"POST",body:JSON.stringify({description:"TOEIC 700 trainer progress (auto sync)",public:false,files:{[GH_FILE]:{content:syncPayload()}}})});id=g.id;}
+  try{localStorage.setItem(GH_GIST,id);}catch(e){}
+  return id;
+}
+async function gistPull(){
+  const id=await gistFindOrCreate();const g=await ghApi("/gists/"+id);const f=g.files&&g.files[GH_FILE];if(!f)return false;
+  let content=f.content;if(f.truncated&&f.raw_url){const r=await fetch(f.raw_url);content=await r.text();}
+  let remote;try{remote=JSON.parse(content).state;}catch(e){return false;}
+  if(!remote)return false;
+  const merged=mergeState(S,remote);const changed=JSON.stringify(merged)!==JSON.stringify(S);
+  S=merged;try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}
+  return changed;
+}
+async function gistPush(){const id=await gistFindOrCreate();await ghApi("/gists/"+id,{method:"PATCH",body:JSON.stringify({files:{[GH_FILE]:{content:syncPayload()}}})});}
+async function gistSync(full){
+  if(!STANDALONE||!ghTok()||gh.busy)return;gh.busy=true;gh.state="syncing";refreshSyncUI();
+  try{if(full){const ch=await gistPull();if(ch)render();}await gistPush();gh.state="on";gh.at=Date.now();gh.msg="";}
+  catch(e){gh.state="error";gh.msg=e.code==="gh_auth"?"GitHub 토큰이 맞지 않거나 gist 권한이 없어요.":e.status===404?"Gist를 찾지 못했어요. 다시 연결해보세요.":"동기화하지 못했어요. 인터넷 연결을 확인해주세요.";}
+  gh.busy=false;refreshSyncUI();
+}
+function gistSchedule(){if(!STANDALONE||!ghTok())return;clearTimeout(gh.timer);gh.timer=setTimeout(()=>gistSync(false),3000);}
+function refreshSyncUI(){const el=document.getElementById("syncstat");if(el)el.innerHTML=syncStatusHtml();}
+function syncStatusHtml(){
+  if(!ghTok())return "꺼짐";
+  if(gh.state==="syncing")return '<span class="spin"></span>동기화 중…';
+  if(gh.state==="error")return `<span class="bad">${esc(gh.msg)}</span>`;
+  return gh.at?`켜짐 · 마지막 저장 ${new Date(gh.at).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})}`:"켜짐";
+}
+let ghMsg="";
+function syncBox(){
+  if(!STANDALONE)return "";
+  const t=ghTok();
+  return `<section class="sheet"><span class="label">기기 간 동기화</span>
+    <h3 style="margin-top:4px">${t?"GitHub에 자동 저장 중":"폰, 컴퓨터 어디서든 같은 기록 쓰기"}</h3>
+    <p class="note" style="margin:4px 0 10px">상태: <span id="syncstat">${syncStatusHtml()}</span></p>
+    ${t?`<div class="row"><button class="btn ghost sm" data-act="ghsync">지금 동기화</button><button class="btn ghost sm" data-act="ghoff">이 기기에서 끄기</button></div>`
+    :`<ol class="note" style="margin:0 0 10px;padding-left:20px">
+        <li><a href="https://github.com/settings/tokens/new?scopes=gist&description=TOEIC%20700%20trainer" target="_blank" rel="noopener">GitHub 토큰 만들기</a>를 열어요. <b>gist</b> 항목만 체크된 상태로 열려요.</li>
+        <li>Expiration은 원하는 기간으로 두고 맨 아래 <b>Generate token</b>을 눌러요.</li>
+        <li><span class="kbd">ghp_</span>로 시작하는 토큰을 복사해서 아래에 붙여넣어요.</li></ol>
+      <form class="row" id="ghform"><input id="ghin" type="password" autocomplete="off" placeholder="ghp_… 토큰 붙여넣기" style="flex:1;min-width:0;padding:9px 12px;border:none;border-radius:10px;background:var(--surface-2);color:var(--ink);font:inherit"><button class="btn print" type="submit">연결</button></form>
+      <p class="note" style="margin:8px 0 0">기록은 내 GitHub 계정의 <b>비공개 Gist</b>에 저장돼요. 토큰은 이 기기 브라우저에만 저장되고, gist 말고 다른 권한은 없어요. 기기마다 같은 토큰을 한 번씩 넣으면 돼요.</p>`}
+    ${ghMsg?`<p class="note" style="margin:8px 0 0;color:var(--primary)">${esc(ghMsg)}</p>`:""}
+  </section>`;
+}
+async function ghConnect(tok){
+  tok=(tok||"").trim();if(!tok)return;
+  try{localStorage.setItem(GH_TOK,tok);localStorage.removeItem(GH_GIST);}catch(e){ghMsg="이 브라우저에 저장할 수 없어요.";render();return;}
+  ghMsg="연결하는 중…";render();
+  try{await ghApi("/gists?per_page=1");await gistSync(true);ghMsg=gh.state==="error"?gh.msg:"연결됐어요. 이제 이 기기의 기록이 자동으로 저장되고, 다른 기기 기록과 합쳐져요.";}
+  catch(e){try{localStorage.removeItem(GH_TOK);}catch(_){}ghMsg=e.code==="gh_auth"?"토큰이 맞지 않거나 gist 권한이 없어요. 다시 확인해주세요.":"GitHub에 연결하지 못했어요. 인터넷 연결을 확인해주세요.";}
+  render();
+}
+if(STANDALONE&&ghTok()){setTimeout(()=>gistSync(true),300);window.addEventListener("focus",()=>{if(Date.now()-gh.at>60000)gistSync(true);});}
+
 (async()=>{
   if(!window.claude)return;
   claude.use("sample").then(s=>{sample=s;render();});
@@ -577,7 +666,7 @@ function rToday(){
   const known=allWords().filter(w=>S.words[w.w]==="known").length;
   const m=S.mock||{};
   const dueN=wnDue().length;
-  $("#main").innerHTML=`${STANDALONE&&!gkey()?keyBox():""}
+  $("#main").innerHTML=`${STANDALONE&&!gkey()?keyBox():""}${STANDALONE&&!ghTok()?syncBox():""}
   ${dueN?`<section class="sheet row" style="justify-content:space-between"><div><span class="label">오답 복습</span><h3 style="margin-top:2px">오늘 다시 풀 문제 ${dueN}개</h3></div><button class="btn print" data-tab="wrong">오답노트 열기</button></section>`:""}
   <div class="stats">
     <div><div class="v">${acc==null?"–":acc+"%"}</div><div class="k">Part 5 정답률 (${st.n}문제)</div></div>
@@ -599,7 +688,9 @@ function rToday(){
       ${["1","2"].map(n=>`<span>${n}회</span><input id="m${n}lc" inputmode="numeric" data-mock="${n}lc" value="${esc(m[n+"lc"]??"")}" placeholder="0–100"><input id="m${n}rc" inputmode="numeric" data-mock="${n}rc" value="${esc(m[n+"rc"]??"")}" placeholder="0–100">`).join("")}
     </div>
     ${mockAdvice(m)}
-  </section>`;
+  </section>
+  ${STANDALONE&&ghTok()?syncBox():""}
+  ${STANDALONE&&gkey()?keyBox():""}`;
 }
 function mockAdvice(m){
   const lc=+m["1lc"],rc=+m["1rc"];
@@ -942,6 +1033,7 @@ function wnDue(){const t=todayKey();return wnActive().filter(e=>e.due<=t);}
 function p5WrongIds(){return wnActive().filter(e=>e.kind==="p5").map(e=>e.qid);}
 const STOP=new Set("the a an and or but of to in on at for with from by as is are was were be been being it its this that these those will would can could should may might must have has had do does did not no yes your our their his her my me you we they he she them us i if then than so such into about over under after before during until since while because although however also some any all each every other more most very much many which who whom whose what when where why how there here please thank thanks".split(" "));
 function wordCands(e){const src=[e.q,...(e.c||[]),e.clueText||"",e.ctx||""].join(" ");const seen=new Set(),out=[];
+  ((e.ai&&e.ai.words)||[]).forEach(w=>{const k=w.toLowerCase().trim();if(k&&!seen.has(k)){seen.add(k);out.push(k);}});
   (src.match(/[A-Za-z][A-Za-z'-]{3,}/g)||[]).forEach(w=>{const k=w.toLowerCase().replace(/'s$/,"");if(!STOP.has(k)&&!seen.has(k)){seen.add(k);out.push(k);}});return out.slice(0,16);}
 function trapOf(e){
   const pick=e.c&&e.pick>=0?e.c[e.pick]:null,ans=e.c?e.c[e.a]:"";if(pick==null)return e.pick===-1?"시간 초과":"";
@@ -975,8 +1067,34 @@ function reasonBlock(key){
     <input class="memo" data-memo="1" placeholder="메모 (선택): 무엇을 헷갈렸는지" value="${esc(e.memo||"")}">
   </div>`;
 }
+async function analyzeWrong(e){
+  if(!sample||e.ai||e.aiBusy)return;e.aiBusy=true;e.aiErr="";render();
+  const opts=(e.c||[]).map((o,j)=>L[j]+") "+o).join(" / ");
+  const partName=e.kind==="p5"?"Part 5":e.kind==="lc"?"LC Part "+e.part:"RC Part "+e.part;
+  const prompt=`토익 ${partName} 오답 분석이야. 정확하게, 이 문제의 단어를 써서 구체적으로 설명해.
+${e.part===1?"사진(장면 설명): "+(e.scene||""):"문제: "+(e.q||"")}
+${e.ctx?"빈칸이 있는 문장: "+e.ctx:""}
+보기: ${opts}
+학생 답: ${e.pick!=null&&e.pick>=0?L[e.pick]+") "+e.c[e.pick]:"고르지 않음/시간 초과"}
+정답: ${L[e.a]}) ${e.c[e.a]}
+${e.clueText?"지문·대화 속 단서: "+e.clueText:""}
+기존 해설(틀릴 수도 있으니 그대로 믿지 말 것): ${e.ex||""}
+학생이 고른 오답 원인: ${REASON_LABEL[e.reason]||"미정"}
+JSON 객체만 출력: {"rule":"이 문제를 푸는 핵심 규칙 (한국어 1문장)","wrong":"학생이 고른 보기가 왜 틀렸는지 정확한 이유 (한국어 1~2문장, 고르지 않았으면 정답을 고르는 방법)","check":"다음에 같은 실수를 막는 체크 문구 (한국어 25자 이내, '~하기'로 끝나게)","words":["학생이 모를 만한 핵심 영단어나 표현, 최대 4개"]}`;
+  try{const o=await sample.json(prompt,{modelTier:"default",cache:false});
+    if(!o||typeof o.rule!=="string")throw {code:"invalid_json"};
+    e.ai={rule:String(o.rule),wrong:String(o.wrong||""),check:String(o.check||"").slice(0,60),words:Array.isArray(o.words)?o.words.map(w=>String(w).toLowerCase()).slice(0,4):[]};save();}
+  catch(err){e.aiErr=errMsg(err).replace("만들지 못했어요","분석하지 못했어요");}
+  e.aiBusy=false;render();
+}
+function aiBlock(e){
+  if(e.aiBusy)return `<div class="ai-why"><span class="spin"></span>이 문제에 맞춘 분석을 만드는 중…</div>`;
+  if(e.ai)return `<div class="ai-why"><p><b>이 문제 핵심</b>${esc(e.ai.rule)}</p>${e.ai.wrong?`<p><b>${e.pick!=null&&e.pick>=0?`내가 고른 (${L[e.pick]}) ${esc(e.c[e.pick])}가 틀린 이유`:"정답 고르는 법"}</b>${esc(e.ai.wrong)}</p>`:""}</div>`;
+  if(e.aiErr)return `<p class="note bad" style="margin:0">${esc(e.aiErr)} <button type="button" class="link" data-wact="reai">다시 시도</button></p>`;
+  return sample?"":`<p class="note" style="margin:0">AI 기능이 켜져 있으면 이 문제에 맞춘 분석이 나와요.</p>`;
+}
 function presc(e){
-  const r=e.reason,tip=`<p class="presc-tip">${esc(REASON_TIP[r]||"")}</p>`;
+  const r=e.reason,tip=aiBlock(e)+`<p class="presc-tip note">${esc(REASON_TIP[r]||"")}</p>`;
   if(r==="vocab"||r==="meaning"||r==="para"){
     const sel=new Set(e.vsel||[]),c=wordCands(e);
     return `<div class="presc">${tip}${e.wordsAdded?`<p class="note okc">단어장에 ${e.wordsAdded}개 넣었어요. 단어 탭 퀴즈에 먼저 나와요.</p>`:""}
@@ -986,9 +1104,9 @@ function presc(e){
       <button type="button" class="btn ghost sm" data-wact="addwords" ${sel.size?"":"disabled"}>${e.vbusy?'<span class="spin"></span>뜻 찾는 중…':`단어장에 넣기${sel.size?` (${sel.size})`:""}`}</button></div>`;
   }
   if(r==="grammar"){const t=e.kind==="p5"?tipFor(e.t):tipFrom(e.kind==="lc"?LC12_TIPS:RC_TIPS,e.t);
-    return `<div class="presc">${tip}<p class="presc-clue"><b>${esc(e.t||"유형")}</b> ${esc(t)}</p>
+    return `<div class="presc">${tip}<p class="presc-clue"><b>${esc(e.t||"유형")} 일반 팁</b> ${esc(t)}</p>
       ${sample?(e.kind==="p5"?`<button type="button" class="btn ghost sm" data-wact="genp5">이 유형 문제 10개 풀기</button>`:e.kind==="rc"?`<button type="button" class="btn ghost sm" data-wact="genrc">Part ${e.part} 새 세트 풀기</button>`:""):""}</div>`;}
-  if(r==="slip"){return `<div class="presc">${tip}<div class="row" style="gap:6px"><input class="memo" data-slip="1" placeholder="${esc(SLIP_SUGGEST[e.part]||"다음엔 이렇게 하기")}" style="flex:1;min-width:0;margin:0"><button type="button" class="btn ghost sm" data-wact="addcheck">체크리스트에 추가</button></div></div>`;}
+  if(r==="slip"){return `<div class="presc">${tip}<div class="row" style="gap:6px"><input class="memo" data-slip="1" placeholder="${esc((e.ai&&e.ai.check)||SLIP_SUGGEST[e.part]||"다음엔 이렇게 하기")}" style="flex:1;min-width:0;margin:0"><button type="button" class="btn ghost sm" data-wact="addcheck">체크리스트에 추가</button></div></div>`;}
   if(r==="time"){return `<div class="presc">${tip}${e.kind==="p5"?`<button type="button" class="btn ghost sm" data-wact="timed">15초 제한으로 다시 풀기</button>`:`<p class="note">${e.part===7?"문제를 먼저 읽고 키워드가 있는 문장만 찾아 읽으세요.":"빈칸 앞뒤로 바로 풀리는 문제부터 끝내세요."}</p>`}</div>`;}
   if(r==="unheard"){return `<div class="presc">${tip}${HAS_TTS||e.clueText?`<button type="button" class="btn ghost sm" data-wact="hear">${e.part<=2?"문제와 정답 듣기":"단서 문장 듣기"}</button>`:""}${e.clueText?`<p class="presc-clue">${esc(e.clueText)}</p>`:""}</div>`;}
   return `<div class="presc">${tip}</div>`;
@@ -1011,15 +1129,16 @@ function hearWrong(e){
 }
 function wnHandle(ev){
   const box=ev.target.closest(".why");if(!box)return false;const e=(S.wn||{})[box.dataset.key];if(!e)return true;
-  const rb=ev.target.closest("[data-reason]");if(rb){e.reason=e.reason===rb.dataset.reason?null:rb.dataset.reason;save();render();return true;}
+  const rb=ev.target.closest("[data-reason]");if(rb){e.reason=e.reason===rb.dataset.reason?null:rb.dataset.reason;save();render();if(e.reason)analyzeWrong(e);return true;}
   const vw=ev.target.closest("[data-vw]");if(vw){const s=new Set(e.vsel||[]);const w=vw.dataset.vw;s.has(w)?s.delete(w):s.add(w);e.vsel=[...s];render();return true;}
   const wa=ev.target.closest("[data-wact]");if(wa){const a=wa.dataset.wact;
     if(a==="addwords")addWordsFromWrong(e);
     else if(a==="genp5"){RS=null;S.rcPart=5;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}P=null;genQ([e.t]);}
     else if(a==="genrc"){P=null;RS=null;S.rcPart=e.part;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}genRC(e.part);}
-    else if(a==="addcheck"){const inp=box.querySelector("[data-slip]");const v=(inp&&inp.value.trim())||SLIP_SUGGEST[e.part]||"";if(v){S.checklist=S.checklist||[];if(!S.checklist.includes(v))S.checklist.push(v);e.checkAdded=true;save();render();}}
+    else if(a==="addcheck"){const inp=box.querySelector("[data-slip]");const v=(inp&&inp.value.trim())||(e.ai&&e.ai.check)||SLIP_SUGGEST[e.part]||"";if(v){S.checklist=S.checklist||[];if(!S.checklist.includes(v))S.checklist.push(v);e.checkAdded=true;save();render();}}
     else if(a==="timed"){const ids=new Set(wnActive().filter(x=>x.kind==="p5"&&(x.reason==="time"||x.key===e.key)).map(x=>x.qid));const list=allQs().filter(q=>ids.has(q.id));RS=null;S.rcPart=5;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(list,{limit:15});window.scrollTo({top:0});}
     else if(a==="hear")hearWrong(e);
+    else if(a==="reai"){e.aiErr="";analyzeWrong(e);}
     return true;}
   return ev.type==="click"?false:true;
 }
@@ -1088,7 +1207,7 @@ function rWrong(){
 }
 async function runWnAI(){
   if(!sample||wnAI.busy)return;wnAI={busy:true};render();
-  const rows=wnAll().slice(-60).map(e=>`- [${e.kind==="p5"?"P5":(e.kind==="lc"?"LC":"RC")+" P"+e.part}] 유형:${e.t||"-"} / 원인:${e.reason?REASON_LABEL[e.reason]:"미기록"} / 함정:${e.trap||"-"} / ${e.wrongCount}번 틀림 / ${e.grad?"졸업":"남음"}${e.memo?" / 메모:"+e.memo:""} / 문제:${(e.q||e.scene||"").slice(0,90)} / 내답:${e.pick>=0&&e.c?e.c[e.pick]:"-"} / 정답:${e.c?e.c[e.a]:""}`).join("\n");
+  const rows=wnAll().slice(-60).map(e=>`- [${e.kind==="p5"?"P5":(e.kind==="lc"?"LC":"RC")+" P"+e.part}] 유형:${e.t||"-"} / 원인:${e.reason?REASON_LABEL[e.reason]:"미기록"} / 함정:${e.trap||"-"} / ${e.wrongCount}번 틀림 / ${e.grad?"졸업":"남음"}${e.memo?" / 메모:"+e.memo:""}${e.ai?" / 분석:"+e.ai.rule:""} / 문제:${(e.q||e.scene||"").slice(0,90)} / 내답:${e.pick>=0&&e.c?e.c[e.pick]:"-"} / 정답:${e.c?e.c[e.a]:""}`).join("\n");
   const prompt=`토익 시험(2026-11-15)을 앞둔 학생의 오답 기록이야. 목표 700점, 최근 모의고사 150/200(LC 77, RC 73), P4와 P7 후반이 약점.
 ${rows}
 ${(S.checklist||[]).length?"학생이 만든 실수 체크리스트: "+S.checklist.join(" / "):""}
@@ -1823,7 +1942,7 @@ async function sendChat(text){
     save();render();
   }
 }
-$("#main").addEventListener("submit",e=>{if(e.target.id==="keyform"){e.preventDefault();saveKey($("#gkeyin").value);return;}if(e.target.id==="composer"){e.preventDefault();sendChat($("#chatin").value);}});
+$("#main").addEventListener("submit",e=>{if(e.target.id==="ghform"){e.preventDefault();ghConnect($("#ghin").value);return;}if(e.target.id==="keyform"){e.preventDefault();saveKey($("#gkeyin").value);return;}if(e.target.id==="composer"){e.preventDefault();sendChat($("#chatin").value);}});
 $("#main").addEventListener("input",e=>{if(e.target.id==="chatin"){chatDraft=e.target.value;e.target.style.height="46px";e.target.style.height=Math.min(e.target.scrollHeight,140)+"px";}});
 $("#main").addEventListener("keydown",e=>{if(e.target.id==="chatin"&&e.key==="Enter"&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();sendChat(e.target.value);}});
 
@@ -1839,6 +1958,8 @@ $("#main").addEventListener("click",e=>{
     return;}
   if(e.target.closest("[data-act='wnp5']")){const list=wnDue().filter(x=>x.kind==="p5").map(x=>({id:x.qid,q:x.q,c:x.c,a:x.a,cat:x.t,ex:x.ex}));RS=null;S.rcPart=5;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(list);window.scrollTo({top:0});return;}
   if(e.target.closest("[data-act='wnai']")){runWnAI();return;}
+  if(e.target.closest("[data-act='ghsync']")){gistSync(true);return;}
+  if(e.target.closest("[data-act='ghoff']")){try{localStorage.removeItem(GH_TOK);localStorage.removeItem(GH_GIST);}catch(_){}gh.state="off";gh.at=0;ghMsg="이 기기에서 동기화를 껐어요. GitHub에 저장된 기록은 그대로 있어요.";render();return;}
   const chip=e.target.closest("[data-chip]");if(chip){sendChat(chip.dataset.chip);return;}
   const ca=e.target.closest("[data-chatact]");if(ca){const [i,j]=ca.dataset.chatact.split("-").map(Number);const a=S.chat[i]&&S.chat[i].acts[j];if(!a)return;
     if(a.type==="p5"){const set=new Set(a.ids);const list=allQs().filter(q=>set.has(q.id));if(list.length){tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(list);window.scrollTo({top:0});}}
