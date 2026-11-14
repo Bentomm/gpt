@@ -63,7 +63,6 @@ nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex
   background:color-mix(in srgb,var(--surface-2) 88%,transparent);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px)}
 nav.tabs::-webkit-scrollbar{display:none}
 nav.tabs button{flex:1 0 auto;border:none;background:transparent;padding:7px 14px;border-radius:9px;font-weight:600;font-size:14px;color:var(--muted);white-space:nowrap;transition:background .2s,color .2s}
-nav.tabs button:hover{color:var(--ink)}
 nav.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.04)}
 nav.tabs .badge{display:inline-block;min-width:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center}
 
@@ -75,10 +74,8 @@ h3{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:-.
 .sheet{background:var(--surface);border-radius:var(--r);padding:24px;box-shadow:var(--shadow)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .btn{border:none;background:var(--primary);color:var(--primary-ink);padding:11px 20px;border-radius:980px;font-weight:600;font-size:15px;transition:filter .15s,background .15s,transform .1s}
-.btn:hover:not(:disabled){filter:brightness(1.08)}
 .btn:active:not(:disabled){transform:scale(.98)}
 .btn.ghost{background:var(--surface-2);color:var(--primary)}
-.btn.ghost:hover:not(:disabled){filter:brightness(.97)}
 .btn.print{background:var(--primary);color:var(--primary-ink)}
 .btn:disabled{opacity:.4;cursor:default}
 .note{font-size:13px;color:var(--muted);letter-spacing:-.005em}
@@ -121,7 +118,6 @@ h3{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:-.
 .qtext .blank{display:inline-block;min-width:80px;height:1.1em;vertical-align:-.18em;border-bottom:2px solid var(--primary);margin:0 3px}
 .opts{display:flex;flex-direction:column;gap:8px}
 .opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1.5px solid var(--line);background:var(--surface);padding:13px 16px;border-radius:14px;font-size:16px;transition:background .15s,border-color .15s}
-.opt:hover:not(:disabled){border-color:var(--primary)}
 .opt:disabled{cursor:default}
 .bub{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:13px;background:var(--surface-2);color:var(--muted)}
 .opt.picked{border-color:var(--primary);background:var(--primary-soft)}
@@ -195,7 +191,6 @@ button,.opt,label{touch-action:manipulation;-webkit-tap-highlight-color:transpar
 /* floating AI tutor */
 #fab{position:fixed;right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;align-items:center;gap:8px;
   border:none;background:var(--ink);color:var(--surface);padding:13px 18px;border-radius:980px;font-weight:600;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.08);transition:transform .15s}
-#fab:hover{transform:translateY(-1px)}
 #cpanel{position:fixed;z-index:40;right:calc(16px + env(safe-area-inset-right,0px));top:calc(16px + env(safe-area-inset-top,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:400px;max-width:calc(100vw - 32px);
   display:flex;flex-direction:column;background:var(--bg);border-radius:22px;box-shadow:0 20px 60px rgba(0,0,0,.22),0 0 0 1px var(--line);overflow:hidden}
 #cpanel[hidden]{display:none!important}
@@ -297,7 +292,6 @@ table.t td,table.t th{border-bottom:1px solid var(--line);padding:9px 8px;text-a
 .composer .btn{height:44px}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{border:none;background:var(--surface-2);color:var(--primary);border-radius:980px;padding:8px 14px;font-size:14px;font-weight:500}
-.chip:hover{background:var(--primary-soft)}
 
 /* listening */
 .lq{display:flex;flex-direction:column;gap:8px;padding:18px 0;border-top:1px solid var(--line)}
@@ -319,6 +313,14 @@ table.t td,table.t th{border-bottom:1px solid var(--line);padding:9px 8px;text-a
 .sl .ko{display:block;font-size:14px;color:var(--muted);margin-top:2px}
 .sl .ct{display:inline-block;font-size:11px;font-weight:700;color:#1D1D1F;background:var(--hl);border-radius:980px;padding:1px 8px;margin-left:6px;white-space:nowrap;vertical-align:1px}
 @media (prefers-reduced-motion:reduce){.spin,.eq i{animation:none}.eq i{height:10px}.progress i,.btn,.opt,nav.tabs button{transition:none}}
+@media (hover:hover) and (pointer:fine){
+nav.tabs button:hover{color:var(--ink)}
+.btn:hover:not(:disabled){filter:brightness(1.08)}
+.btn.ghost:hover:not(:disabled){filter:brightness(.97)}
+.opt:hover:not(:disabled){border-color:var(--primary)}
+#fab:hover{transform:translateY(-1px)}
+.chip:hover{background:var(--primary-soft)}
+}
 </style>
 
 <div class="wrap">
@@ -2032,6 +2034,14 @@ $("#main").addEventListener("click",e=>{
   window.scrollTo({top:Math.min(window.scrollY,0)});
 });
 
+
+/* iOS 웹뷰에서 탭이 클릭으로 안 바뀌는 경우 대비: 터치 후 클릭이 안 오면 직접 클릭 */
+(function(){let pend=null;
+  document.addEventListener("pointerup",e=>{if(e.pointerType!=="touch")return;const el=e.target.closest&&e.target.closest("button,label");if(!el||el.disabled)return;
+    clearTimeout(pend);pend=setTimeout(()=>{pend=null;if(document.body.contains(el)&&!el.disabled)el.click();},420);},true);
+  document.addEventListener("click",()=>{if(pend){clearTimeout(pend);pend=null;}},true);
+  document.addEventListener("pointercancel",()=>{if(pend){clearTimeout(pend);pend=null;}},true);
+})();
 render();
 </script>
 
