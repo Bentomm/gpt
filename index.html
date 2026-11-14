@@ -183,6 +183,15 @@ details.adv summary{cursor:pointer;font-size:14px;font-weight:600}
 .checklist li span{flex:1}
 .ai-out{margin-top:10px;padding:14px;border-radius:12px;background:var(--surface-2);font-size:15px;line-height:1.65}
 
+button,.opt,label{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+@media (max-width:700px){
+  .actbar{position:sticky;bottom:0;z-index:4;background:var(--surface);margin-inline:-24px;padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);flex-wrap:nowrap}
+  .actbar .btn{flex:1;padding:14px 12px}
+  .actbar .note{display:none}
+  #fab{width:52px;height:52px;padding:0;justify-content:center;border-radius:50%}
+  #fab span{display:none}
+  body.quiz-mode #fab{bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+}
 /* floating AI tutor */
 #fab{position:fixed;right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;align-items:center;gap:8px;
   border:none;background:var(--ink);color:var(--surface);padding:13px 18px;border-radius:980px;font-weight:600;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.08);transition:transform .15s}
@@ -653,6 +662,7 @@ function render(){
   $("#dday").textContent=dday();
   renderTabs();
   migrateWrong();
+  document.body.classList.toggle("quiz-mode",!!((tab==="p5"&&((P&&P.idx<P.list.length)||RS))||(tab==="lc"&&LL)||(tab==="voca"&&V)));
   if(tab!=="lc"&&LL&&LL.phase!=="review"){clearInterval(LL.timer);stopAudio();LL=null;}
   if(tab!=="lc"&&LL&&LL.replaying){stopAudio();LL.replaying=false;LL.line=-1;}
   ({today:rToday,lc:rLC,p5:rRCtab,voca:rVoca,tips:rTips,wrong:rWrong})[tab]();
@@ -746,7 +756,7 @@ function rP5(){
     <div class="opts">${q.c.map((o,i)=>{let cls="";if(done){if(i===q.a)cls="right";else if(i===P.picked)cls="wrong";}
       return `<button class="opt ${cls}" data-pick="${i}" ${done?"disabled":""}><span class="bub">${L[i]}</span><span>${esc(o)}</span></button>`;}).join("")}</div>
     ${done?`<div class="feedback ${P.picked===q.a?"":"no"}"><b>${P.picked===q.a?"정답!":"정답은 ("+L[q.a]+") "+esc(q.c[q.a])}</b>${esc(q.ex||"")}</div>
-    <div class="row" style="margin-top:14px;justify-content:space-between"><button class="btn ghost" data-act="p5home">그만하기</button><button class="btn" data-act="p5next" id="nextbtn">${P.idx+1<P.list.length?"다음 문제":"결과 보기"}</button></div>`:`<p class="note" style="margin:12px 0 0">키보드 1–4 또는 A–D로도 고를 수 있어요.</p>`}
+    <div class="row actbar" style="margin-top:14px;justify-content:space-between"><button class="btn ghost" data-act="p5home">그만하기</button><button class="btn" data-act="p5next" id="nextbtn">${P.idx+1<P.list.length?"다음 문제":"결과 보기"}</button></div>`:`<p class="note" style="margin:12px 0 0">키보드 1–4 또는 A–D로도 고를 수 있어요.</p>`}
   </section>`;
   if(done)$("#nextbtn")?.focus();
 }
@@ -947,7 +957,7 @@ function rVoca(){
     <p class="muted" style="margin:0 0 14px">${done?esc(w.h):"뜻을 고르세요"}</p>
     <div class="opts">${V.opts.map((o,i)=>{let cls="";if(done){if(o===w.m)cls="right";else if(i===V.picked)cls="wrong";}
       return `<button class="opt ${cls}" data-vpick="${i}" ${done?"disabled":""}><span class="bub">${i+1}</span><span>${esc(o)}</span></button>`;}).join("")}</div>
-    <div class="row" style="margin-top:14px;justify-content:space-between">
+    <div class="row actbar" style="margin-top:14px;justify-content:space-between">
       ${done?`<button class="btn ghost" data-act="vhome">그만하기</button><button class="btn" data-act="vnext" id="vnext">${V.idx+1<V.list.length?"다음":"결과 보기"}</button>`
         :`<button class="btn ghost" data-act="vdunno">몰라요</button><span class="note">1–4 키로도 고를 수 있어요</span>`}
     </div></section>`;
@@ -1381,7 +1391,7 @@ function startRC(s){if(!s)return;clearInterval(window._rct);RS={set:s,picks:new 
   window._rct=setInterval(()=>{const el=$("#rctimer");if(!el||!RS||RS.phase!=="solve")return;const t=(Date.now()-RS.start)/1000;el.textContent=fmtSec(t)+" / "+fmtSec(rcTarget(RS.set));el.classList.toggle("slow",t>rcTarget(RS.set));},500);}
 function rcSubmit(){if(!RS||RS.phase!=="solve")return;clearInterval(window._rct);RS.sec=Math.round((Date.now()-RS.start)/1000);RS.phase="review";
   const s=RS.set,c=s.qs.filter((q,i)=>RS.picks[i]===q.a).length;S.rcSt=S.rcSt||{};const k="p"+s.part;S.rcSt[k]=S.rcSt[k]||{n:0,c:0,sec:0};S.rcSt[k].n+=s.qs.length;S.rcSt[k].c+=c;S.rcSt[k].sec+=RS.sec;
-  s.qs.forEach((q,qi)=>{let ctx="";if(s.part===6){const body=s.docs[0].body;const sent=body.split(/(?<=[.!?])\s+|\n+/).find(x=>x.includes("["+(qi+1)+"]"));ctx=sent?sent.replace(/\[(\d)\]/g,(m,n)=>+n===qi+1?"_____":"…").trim():"";}
+  s.qs.forEach((q,qi)=>{let ctx="";if(s.part===6){const body=s.docs[0].body;const sent=body.replace(/([.!?])\s+/g,"$1\n").split(/\n+/).find(x=>x.includes("["+(qi+1)+"]"));ctx=sent?sent.replace(/\[(\d)\]/g,(m,n)=>+n===qi+1?"_____":"…").trim():"";}
     recordResult(`rc:${s.id}:${qi}`,RS.picks[qi]===q.a,{kind:"rc",part:s.part,setId:s.id,qi,q:s.part===6?`빈칸 ${qi+1}`:q.q,c:q.c,a:q.a,ex:q.ex,t:q.t||"",clueText:q.clue||"",ctx,pick:RS.picks[qi]==null?null:RS.picks[qi]});});
   S.rcType=S.rcType||{};s.qs.forEach((q,i)=>{const t=q.t||"기타";S.rcType[t]=S.rcType[t]||{n:0,c:0};S.rcType[t].n++;S.rcType[t].c+=RS.picks[i]===q.a?1:0;});
   S.rcSeen=S.rcSeen||{};S.rcSeen[s.id]=1;save();render();window.scrollTo({top:0});}
@@ -1441,7 +1451,7 @@ function rRCset(){
     <div class="docs">${docs}</div>
   </section>
   <section class="sheet">${qsHtml}
-    <div class="row" style="margin-top:16px;justify-content:space-between">
+    <div class="row actbar" style="margin-top:16px;justify-content:space-between">
       ${rev?`<button class="btn ghost" data-act="rchome">처음으로</button><button class="btn print" data-act="rcstart">다음 Part ${s.part} 세트</button>`
         :`<button class="btn ghost" data-act="rchome">그만하기</button><button class="btn print" data-act="rcsubmit">채점하기${RS.picks.some(p=>p==null)?` (${RS.picks.filter(p=>p==null).length}개 안 고름)`:""}</button>`}
     </div></section>`;
