@@ -149,6 +149,40 @@ h3{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:-.
 
 details.adv{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--surface-2)}
 details.adv summary{cursor:pointer;font-size:14px;font-weight:600}
+/* analytics */
+.est{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-top:8px}
+.est-n{font-size:64px;font-weight:700;letter-spacing:-.05em;line-height:1;font-variant-numeric:tabular-nums}
+.est-u{font-size:20px;font-weight:600;color:var(--muted);margin-left:4px}
+.est-lr{display:flex;gap:24px}
+.est-lr div{display:flex;flex-direction:column}
+.est-lr b{font-size:26px;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.est-lr span{font-size:13px;color:var(--muted)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.lg-bar{width:14px;height:8px;border-radius:2px;background:var(--primary);display:inline-block}
+.lg-tick{width:2px;height:12px;background:var(--ink);display:inline-block}
+.partbars{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.pb-row{display:grid;grid-template-columns:5.2em minmax(0,1fr) 6.5em;gap:12px;align-items:center;font-size:14px}
+.pb-l.wide{grid-column:1/-1;margin-bottom:-6px;font-size:13px;color:var(--muted)}
+.pb-row:has(.pb-l.wide){grid-template-columns:minmax(0,1fr) 6.5em}
+.pb-track{position:relative;height:10px;border-radius:5px;background:var(--surface-2)}
+.pb-bar{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--primary)}
+.pb-bar.weak{background:var(--bad)}
+.pb-tick{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--ink);border-radius:1px}
+.pb-v{text-align:right;font-weight:600}
+.pb-v small{font-weight:400;color:var(--muted);font-size:12px}
+details.tbl{margin-top:14px}
+details.tbl summary{cursor:pointer;font-size:13px;color:var(--primary);font-weight:600}
+.chart2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}
+@media (max-width:600px){.chart2{grid-template-columns:1fr}}
+.chart{width:100%;height:auto;display:block}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .ax{fill:var(--muted);font-size:10px}
+.chart .val{fill:var(--ink);font-size:11px;font-weight:600}
+.chart .bar{fill:var(--primary)}
+.chart .line{fill:none;stroke:var(--primary);stroke-width:2}
+.chart .dot{fill:var(--primary);stroke:var(--surface);stroke-width:2}
+.insight{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-size:15px}
 /* timed mode */
 .switch{position:relative;flex:0 0 51px;width:51px;height:31px;border:none;border-radius:999px;background:var(--line);padding:0;transition:background .2s}
 .switch i{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
@@ -567,6 +601,7 @@ function mergeState(local,remote){
   out.checks=Object.assign({},older.checks||{},newer.checks||{});
   ["seen","lseen","rcSeen"].forEach(k=>{out[k]=Object.assign({},older[k]||{},newer[k]||{});});
   out.checklist=[...new Set([...(older.checklist||[]),...(newer.checklist||[])])];
+  {const seen=new Set(),lg=[];[...(older.log||[]),...(newer.log||[])].forEach(l=>{const k=l.ts+":"+l.p+":"+l.t;if(!seen.has(k)){seen.add(k);lg.push(l);}});out.log=lg.sort((a,b)=>a.ts-b.ts).slice(-4000);}
   out.gen=unionBy(newer.gen,older.gen,"id");out.genL=unionBy(newer.genL,older.genL,"id");out.genRC=unionBy(newer.genRC,older.genRC,"id");out.genW=unionBy(newer.genW,older.genW,"w");
   out.updatedAt=Math.max(local.updatedAt||0,remote.updatedAt||0);
   return out;
@@ -654,7 +689,7 @@ function dday(){const t=new Date();t.setHours(0,0,0,0);const e=new Date(2026,10,
 const blankify=q=>esc(q).replace(/-{3,}/,'<span class="blank"></span>');
 
 /* ---------- tabs ---------- */
-const TABS=[["today","오늘"],["lc","LC 듣기"],["p5","RC 읽기"],["voca","단어"],["tips","파트별 팁"],["wrong","오답노트"]];
+const TABS=[["today","오늘"],["lc","LC 듣기"],["p5","RC 읽기"],["voca","단어"],["tips","파트별 팁"],["wrong","오답노트"],["stats","분석"]];
 let tab="today";
 let chatOpen=false;
 try{const h=location.hash.slice(1);if(TABS.some(t=>t[0]===h))tab=h;if(h==="chat")chatOpen=true;}catch(e){}
@@ -674,7 +709,7 @@ function render(){
   document.body.classList.toggle("quiz-mode",!!((tab==="p5"&&((P&&P.idx<P.list.length)||RS))||(tab==="lc"&&LL)||(tab==="voca"&&V)));
   if(tab!=="lc"&&LL&&LL.phase!=="review"){clearInterval(LL.timer);stopAudio();LL=null;}
   if(tab!=="lc"&&LL&&LL.replaying){stopAudio();LL.replaying=false;LL.line=-1;}
-  ({today:rToday,lc:rLC,p5:rRCtab,voca:rVoca,tips:rTips,wrong:rWrong})[tab]();
+  ({today:rToday,lc:rLC,p5:rRCtab,voca:rVoca,tips:rTips,wrong:rWrong,stats:rStats})[tab]();
   if(typeof renderPanel==="function")renderPanel();
 }
 
@@ -784,6 +819,7 @@ function answer(i){
   const q=P.list[P.idx],sec=Math.round((Date.now()-P.start)/1000),ok=i===q.a;
   P.picked=i;P.res.push({q,ok,sec,pick:i});
   S.st.n++;S.st.c+=ok?1:0;S.st.sec+=Math.min(sec,120);
+  logEv(5,ok,sec,q.cat||"기타");
   S.catSt=S.catSt||{};const ck=q.cat||"기타";S.catSt[ck]=S.catSt[ck]||{n:0,c:0};S.catSt[ck].n++;S.catSt[ck].c+=ok?1:0;
   S.seen=S.seen||{};S.seen[q.id]=1;
   recordResult("p5:"+q.id,ok,{kind:"p5",part:5,qid:q.id,q:q.q,c:q.c,a:q.a,ex:q.ex,t:q.cat||"기타",pick:i,sec});
@@ -1234,6 +1270,130 @@ function rWrong(){
       </article>`;}).join(""):`<p class="note" style="margin:12px 0 0">해당하는 오답이 없어요.</p>`}
   </section>`;
 }
+/* ---------- 데이터 분석실 ---------- */
+function logEv(p,ok,sec,t){S.log=S.log||[];S.log.push({ts:Date.now(),p,ok:ok?1:0,sec:sec==null?null:Math.round(sec),t:t||""});if(S.log.length>4000)S.log=S.log.slice(-4000);}
+const MOCK={1:[5,6],2:[21,25],3:[30,39],4:[21,30],5:[25,30],6:[13,16],7:[35,54]};
+const PART_N={1:6,2:25,3:39,4:30,5:30,6:16,7:54};
+function partStat(p){if(p===5)return {n:S.st.n||0,c:S.st.c||0};if(p<=4){const x=(S.lc||{})["p"+p];return x?{n:x.n,c:x.c}:{n:0,c:0};}const x=(S.rcSt||{})["p"+p];return x?{n:x.n,c:x.c}:{n:0,c:0};}
+function dayKeyOf(ts){const d=new Date(ts);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function estScore(){
+  const used={};let lc=0,rc=0;
+  for(const p of [1,2,3,4,5,6,7]){const st=partStat(p);let acc;if(st.n>=6){acc=st.c/st.n;used[p]="앱";}else{acc=MOCK[p][0]/MOCK[p][1];used[p]="모의고사";}
+    const c=acc*PART_N[p];if(p<=4)lc+=c;else rc+=c;}
+  const r5=x=>Math.round(x/5)*5,cl=x=>Math.max(5,Math.min(495,x));
+  const L=cl(r5(5*lc+5)),R=cl(r5(5*rc-20));
+  return {L,R,T:L+R,lcC:Math.round(lc),rcC:Math.round(rc),used};
+}
+function svgDays(days,kind){
+  const W=320,H=150,pl=30,pr=8,pt=14,pb=26,iw=W-pl-pr,ih=H-pt-pb,n=days.length,bw=Math.min(26,iw/n*0.55);
+  const x=i=>pl+iw*(i+0.5)/n;
+  let g=`<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="${kind==="count"?"최근 7일 푼 문제 수":"최근 7일 정답률"}">`;
+  if(kind==="count"){
+    const mx=Math.max(4,...days.map(d=>d.n));const top=Math.ceil(mx/4)*4;const y=v=>pt+ih-ih*v/top;
+    [0,top/2,top].forEach(v=>{g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${pl-6}" y="${y(v)+4}" class="ax" text-anchor="end">${v}</text>`;});
+    const imax=days.reduce((b,d,i)=>d.n>days[b].n?i:b,0);
+    days.forEach((d,i)=>{if(d.n){const h=ih*d.n/top,yy=pt+ih-h,r=Math.min(4,h/2);
+      g+=`<path d="M${x(i)-bw/2},${pt+ih} V${yy+r} Q${x(i)-bw/2},${yy} ${x(i)-bw/2+r},${yy} H${x(i)+bw/2-r} Q${x(i)+bw/2},${yy} ${x(i)+bw/2},${yy+r} V${pt+ih} Z" class="bar"><title>${d.label}: ${d.n}문제</title></path>`;
+      if(i===imax||i===n-1)g+=`<text x="${x(i)}" y="${yy-4}" class="val" text-anchor="middle">${d.n}</text>`;}
+      g+=`<rect x="${x(i)-iw/n/2}" y="${pt}" width="${iw/n}" height="${ih}" fill="transparent"><title>${d.label}: ${d.n}문제${d.n?` · 정답률 ${Math.round(d.c/d.n*100)}%`:""}</title></rect>`;});
+  }else{
+    const y=v=>pt+ih-ih*v/100;
+    [0,50,100].forEach(v=>{g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${pl-6}" y="${y(v)+4}" class="ax" text-anchor="end">${v}%</text>`;});
+    const pts=days.map((d,i)=>d.n?[x(i),y(d.c/d.n*100),Math.round(d.c/d.n*100),d]:null);
+    let path="";pts.forEach(p=>{if(p)path+=(path?" L":"M")+p[0]+","+p[1];});
+    if(path)g+=`<path d="${path}" class="line"/>`;
+    const last=pts.map((p,i)=>p?i:-1).filter(i=>i>=0).pop();
+    pts.forEach((p,i)=>{if(!p)return;g+=`<circle cx="${p[0]}" cy="${p[1]}" r="4" class="dot"><title>${p[3].label}: ${p[2]}% (${p[3].c}/${p[3].n})</title></circle>`;if(i===last)g+=`<text x="${p[0]}" y="${p[1]-9}" class="val" text-anchor="middle">${p[2]}%</text>`;});
+  }
+  days.forEach((d,i)=>{g+=`<text x="${x(i)}" y="${H-8}" class="ax" text-anchor="middle">${d.short}</text>`;});
+  return g+"</svg>";
+}
+let anAI={busy:false};
+function anSummaryText(){
+  const e=estScore(),parts=[1,2,3,4,5,6,7].map(p=>{const s=partStat(p);return `P${p} 앱 ${s.n?Math.round(s.c/s.n*100)+"%("+s.n+"문제)":"기록없음"} / 모의고사 ${Math.round(MOCK[p][0]/MOCK[p][1]*100)}%`;}).join(", ");
+  const ty=anTypes().slice(0,6).map(t=>`${t.k} ${Math.round(t.c/t.n*100)}%(${t.n})`).join(", ");
+  const sp=anSpeed().map(b=>`${b.k}: ${b.n}문제 ${b.n?Math.round(b.c/b.n*100)+"%":"-"}`).join(", ");
+  return `예상 점수(대략) LC ${e.L}, RC ${e.R}, 합계 ${e.T}. 파트별: ${parts}. 약한 유형: ${ty||"-"}. Part 5 풀이 시간별 정답률: ${sp}.`;
+}
+function anTypes(){
+  const rows=[];const add=(pre,obj)=>Object.entries(obj||{}).forEach(([k,v])=>{if(v.n>=3)rows.push({k:pre+k,n:v.n,c:v.c});});
+  add("P5 · ",S.catSt);add("LC · ",S.lcType);add("RC · ",S.rcType);
+  const POSN=["P3·4 앞부분 단서","P3·4 중간 단서","P3·4 끝부분 단서"];Object.entries(S.lcPos||{}).forEach(([i,v])=>{if(v.n>=3)rows.push({k:"LC · "+POSN[i],n:v.n,c:v.c});});
+  return rows.sort((a,b)=>a.c/a.n-b.c/b.n||b.n-a.n);
+}
+function anSpeed(){
+  const B=[["10초 이하",0,10],["11~20초",11,20],["21~30초",21,30],["30초 초과",31,1e9]].map(([k,lo,hi])=>({k,lo,hi,n:0,c:0}));
+  (S.log||[]).filter(l=>l.p===5&&l.sec!=null&&l.sec>=0).forEach(l=>{const b=B.find(b=>l.sec>=b.lo&&l.sec<=b.hi);if(b){b.n++;b.c+=l.ok;}});return B;
+}
+function rStats(){
+  const log=S.log||[],today=todayKey();
+  const tot=[1,2,3,4,5,6,7].reduce((a,p)=>{const s=partStat(p);a.n+=s.n;a.c+=s.c;return a;},{n:0,c:0});
+  const tlog=log.filter(l=>dayKeyOf(l.ts)===today),daysSet=new Set(log.map(l=>dayKeyOf(l.ts)));
+  const days=[];for(let i=6;i>=0;i--){const k=addDays(today,-i);const L2=log.filter(l=>dayKeyOf(l.ts)===k);const [y,m,d]=k.split("-");days.push({k,label:`${+m}/${+d}`,short:i===0?"오늘":`${+m}/${+d}`,n:L2.length,c:L2.reduce((a,l)=>a+l.ok,0)});}
+  const e=estScore(),types=anTypes(),weak=types.filter(t=>t.c/t.n<0.7).slice(0,5),strong=types.slice().reverse().filter(t=>t.c/t.n>=0.7).slice(0,3),speed=anSpeed();
+  const fast=speed.slice(0,2).reduce((a,b)=>({n:a.n+b.n,c:a.c+b.c}),{n:0,c:0}),slow=speed.slice(2).reduce((a,b)=>({n:a.n+b.n,c:a.c+b.c}),{n:0,c:0});
+  const traps={};wnAll().forEach(w=>{if(w.trap)traps[w.trap]=(traps[w.trap]||0)+1;});const trapRows=Object.entries(traps).sort((a,b)=>b[1]-a[1]);
+  const pct=(c,n)=>n?Math.round(c/n*100):null;
+  const fallback=Object.entries(e.used).filter(([p,u])=>u==="모의고사").map(([p])=>"P"+p);
+  $("#main").innerHTML=`
+  <div class="stats">
+    <div><div class="v">${tot.n}</div><div class="k">지금까지 푼 문제</div></div>
+    <div><div class="v">${tot.n?pct(tot.c,tot.n)+"%":"–"}</div><div class="k">전체 정답률</div></div>
+    <div><div class="v">${tlog.length}</div><div class="k">오늘 푼 문제</div></div>
+    <div><div class="v">${daysSet.size}</div><div class="k">공부한 날</div></div>
+  </div>
+  <section class="sheet">
+    <span class="label">예상 점수</span>
+    <div class="est"><div><span class="est-n">${e.T}</span><span class="est-u">점</span></div>
+      <div class="est-lr"><div><b>${e.L}</b><span>LC (약 ${e.lcC}/100개)</span></div><div><b>${e.R}</b><span>RC (약 ${e.rcC}/100개)</span></div></div></div>
+    <p class="note" style="margin:10px 0 0">파트별 정답률을 실제 문항 수에 곱해서 낸 <b>아주 대략적인 추정</b>이에요(±30점 정도). ${fallback.length?`기록이 6문제 미만인 ${fallback.join(", ")}는 모의고사(TEST 4) 정답률을 썼어요.`:"모든 파트를 앱 기록으로 계산했어요."}</p>
+  </section>
+  <section class="sheet">
+    <div class="row" style="justify-content:space-between"><h3>파트별 정답률</h3>
+      <div class="legend"><span><i class="lg-bar"></i>앱 연습</span><span><i class="lg-tick"></i>모의고사 TEST 4</span></div></div>
+    <div class="partbars">${[1,2,3,4,5,6,7].map(p=>{const s=partStat(p),a=pct(s.c,s.n),m=Math.round(MOCK[p][0]/MOCK[p][1]*100);
+      return `<div class="pb-row" title="Part ${p} · 앱 ${a==null?"기록 없음":a+"% ("+s.c+"/"+s.n+")"} · 모의고사 ${m}%"><span class="pb-l">Part ${p}</span>
+        <span class="pb-track">${a!=null?`<i class="pb-bar" style="width:${a}%"></i>`:""}<i class="pb-tick" style="left:${m}%"></i></span>
+        <span class="pb-v num">${a==null?`<span class="muted">–</span>`:a+"%"}<small>${s.n?` ${s.n}문제`:""}</small></span></div>`;}).join("")}</div>
+    <details class="tbl"><summary>표로 보기</summary><div class="tablewrap"><table class="t"><tr><th>파트</th><th>앱 정답</th><th>앱 정답률</th><th>모의고사</th></tr>
+      ${[1,2,3,4,5,6,7].map(p=>{const s=partStat(p);return `<tr><td>Part ${p}</td><td class="num">${s.c}/${s.n}</td><td class="num">${s.n?pct(s.c,s.n)+"%":"–"}</td><td class="num">${MOCK[p][0]}/${MOCK[p][1]} (${Math.round(MOCK[p][0]/MOCK[p][1]*100)}%)</td></tr>`;}).join("")}</table></div></details>
+  </section>
+  <section class="sheet">
+    <h3>최근 7일</h3>
+    ${log.length?`<div class="chart2"><div><p class="note">푼 문제 수</p>${svgDays(days,"count")}</div><div><p class="note">정답률</p>${svgDays(days,"acc")}</div></div>`
+      :`<p class="note" style="margin:6px 0 0">이제부터 푸는 문제가 날짜별로 기록돼요. 몇 문제 풀고 오면 그래프가 생겨요.</p>`}
+  </section>
+  <section class="sheet">
+    <h3>Part 5 풀이 시간과 정답률</h3>
+    ${speed.some(b=>b.n)?`<div class="partbars">${speed.map(b=>{const a=pct(b.c,b.n);return `<div class="pb-row" title="${b.k}: ${b.n}문제${b.n?" · 정답률 "+a+"%":""}"><span class="pb-l">${b.k}</span><span class="pb-track">${a!=null?`<i class="pb-bar" style="width:${a}%"></i>`:""}</span><span class="pb-v num">${a==null?`<span class="muted">–</span>`:a+"%"}<small> ${b.n}문제</small></span></div>`;}).join("")}</div>
+      <p class="insight">${fast.n&&slow.n?`20초 안에 푼 문제 정답률은 <b>${pct(fast.c,fast.n)}%</b>, 20초를 넘긴 문제는 <b>${pct(slow.c,slow.n)}%</b>예요. ${pct(slow.c,slow.n)<pct(fast.c,fast.n)?"오래 고민해도 정답률이 오르지 않으니, 실전에서는 20초 넘으면 찍고 넘어가는 게 이득이에요.":"오래 본 문제도 잘 맞히고 있어요. 다만 실전에서는 Part 7 시간을 위해 20초 안쪽을 목표로 하세요."}`:"문제를 더 풀면 시간대별 비교가 나와요."}</p>`
+      :`<p class="note" style="margin:6px 0 0">Part 5를 풀면 시간대별 정답률이 나와요.</p>`}
+  </section>
+  <section class="sheet">
+    <h3>유형별 강점과 약점</h3>
+    ${types.length?`${weak.length?`<p class="note" style="margin:8px 0 6px">약한 유형 (70% 미만, 3문제 이상 푼 것만)</p>`:`<p class="note" style="margin:8px 0 0">70% 미만인 약한 유형이 없어요.</p>`}<div class="partbars">${weak.map(t=>{const a=pct(t.c,t.n);return `<div class="pb-row"><span class="pb-l wide">${esc(t.k)}</span><span class="pb-track"><i class="pb-bar weak" style="width:${a}%"></i></span><span class="pb-v num">${a}%<small> ${t.n}문제</small></span></div>`;}).join("")}</div>
+      ${strong.length?`<p class="note" style="margin:14px 0 6px">강한 유형 (70% 이상)</p><div class="partbars">${strong.map(t=>{const a=pct(t.c,t.n);return `<div class="pb-row"><span class="pb-l wide">${esc(t.k)}</span><span class="pb-track"><i class="pb-bar" style="width:${a}%"></i></span><span class="pb-v num">${a}%<small> ${t.n}문제</small></span></div>`;}).join("")}</div>`:""}`
+      :`<p class="note" style="margin:6px 0 0">유형마다 3문제 이상 풀면 강점과 약점이 나와요.</p>`}
+  </section>
+  ${trapRows.length?`<section class="sheet"><h3>자주 걸린 함정</h3><ol class="toplist" style="margin-top:10px">${trapRows.slice(0,5).map(([k,v])=>`<li><span>${esc(k)}</span><b class="num">${v}번</b></li>`).join("")}</ol></section>`:""}
+  <section class="sheet">
+    <div class="row" style="justify-content:space-between"><h3>AI 분석 코멘트</h3>${sample?`<button class="btn ghost sm" data-act="anai" ${anAI.busy||!tot.n?"disabled":""}>${anAI.busy?'<span class="spin"></span>분석 중…':S.anAI?"다시 분석":"분석하기"}</button>`:""}</div>
+    ${S.anAI?`<div class="ai-out">${mdLite(S.anAI.text)}</div>`:`<p class="note" style="margin:6px 0 0">${sample?"위 숫자를 보고 핵심 인사이트 3개와 시험 당일 전략을 정리해줘요.":"AI 기능이 켜져 있을 때 쓸 수 있어요."}</p>`}
+    ${anAI.err?`<p class="note bad">${esc(anAI.err)}</p>`:""}
+  </section>`;
+}
+async function runAnAI(){
+  if(!sample||anAI.busy)return;anAI={busy:true};render();
+  try{const r=await sample(`토익 시험(2026-11-15)을 앞둔 학생의 학습 데이터 요약이야. 목표 700점, 최근 모의고사 150/200(LC 77, RC 73).
+${anSummaryText()}
+한국어 해요체로 짧게:
+**핵심 인사이트** (숫자를 근거로 3개, 각 1문장)
+**시험 당일 전략** (LC 1줄, RC 1줄, 시간 배분 1줄)
+예상 점수는 대략치라는 점을 한 번만 짧게 언급해.`,{modelTier:"default",cache:false});S.anAI={text:r.text,at:Date.now()};anAI={busy:false};save();}
+  catch(e){anAI={busy:false,err:errMsg(e).replace("만들","분석하")};}
+  render();
+}
+
 async function runWnAI(){
   if(!sample||wnAI.busy)return;wnAI={busy:true};render();
   const rows=wnAll().slice(-60).map(e=>`- [${e.kind==="p5"?"P5":(e.kind==="lc"?"LC":"RC")+" P"+e.part}] 유형:${e.t||"-"} / 원인:${e.reason?REASON_LABEL[e.reason]:"미기록"} / 함정:${e.trap||"-"} / ${e.wrongCount}번 틀림 / ${e.grad?"졸업":"남음"}${e.memo?" / 메모:"+e.memo:""}${e.ai?" / 분석:"+e.ai.rule:""} / 문제:${(e.q||e.scene||"").slice(0,90)} / 내답:${e.pick>=0&&e.c?e.c[e.pick]:"-"} / 정답:${e.c?e.c[e.a]:""}`).join("\n");
@@ -1414,6 +1574,7 @@ function rcSubmit(){if(!RS||RS.phase!=="solve")return;clearInterval(window._rct)
   const s=RS.set,c=s.qs.filter((q,i)=>RS.picks[i]===q.a).length;S.rcSt=S.rcSt||{};const k="p"+s.part;S.rcSt[k]=S.rcSt[k]||{n:0,c:0,sec:0};S.rcSt[k].n+=s.qs.length;S.rcSt[k].c+=c;S.rcSt[k].sec+=RS.sec;
   s.qs.forEach((q,qi)=>{let ctx="";if(s.part===6){const body=s.docs[0].body;const sent=body.replace(/([.!?])\s+/g,"$1\n").split(/\n+/).find(x=>x.includes("["+(qi+1)+"]"));ctx=sent?sent.replace(/\[(\d)\]/g,(m,n)=>+n===qi+1?"_____":"…").trim():"";}
     recordResult(`rc:${s.id}:${qi}`,RS.picks[qi]===q.a,{kind:"rc",part:s.part,setId:s.id,qi,q:s.part===6?`빈칸 ${qi+1}`:q.q,c:q.c,a:q.a,ex:q.ex,t:q.t||"",clueText:q.clue||"",ctx,pick:RS.picks[qi]==null?null:RS.picks[qi]});});
+  s.qs.forEach((q,qi)=>logEv(s.part,RS.picks[qi]===q.a,RS.sec/s.qs.length,q.t||""));
   S.rcType=S.rcType||{};s.qs.forEach((q,i)=>{const t=q.t||"기타";S.rcType[t]=S.rcType[t]||{n:0,c:0};S.rcType[t].n++;S.rcType[t].c+=RS.picks[i]===q.a?1:0;});
   S.rcSeen=S.rcSeen||{};S.rcSeen[s.id]=1;save();render();window.scrollTo({top:0});}
 function rcSeg(){const rp=S.rcPart||5;return `<div class="seg partseg">${[[5,"Part 5 단문"],[6,"Part 6 장문"],[7,"Part 7 독해"]].map(([p,n])=>`<button data-rcpart="${p}" aria-pressed="${rp===p}">${n}</button>`).join("")}</div>`;}
@@ -1646,6 +1807,7 @@ function lcReview(){
   if(!LL)return;clearInterval(LL.timer);stopAudio();LL.phase="review";LL.line=-1;
   if(!LL.recorded){LL.recorded=true;const s=LL.set,c=s.qs.filter((q,i)=>LL.picks[i]===q.a).length;
     S.lc=S.lc||{};const k="p"+s.part;S.lc[k]=S.lc[k]||{n:0,c:0};S.lc[k].n+=s.qs.length;S.lc[k].c+=c;
+    s.qs.forEach((q,qi)=>logEv(s.part,LL.picks[qi]===q.a,null,q.t||""));
     s.qs.forEach((q,qi)=>{const POSL=["1번 · 앞부분 단서","2번 · 중간 단서","3번 · 끝부분 단서"];
       recordResult(`lc:${s.id}:${qi}`,LL.picks[qi]===q.a,{kind:"lc",part:s.part,setId:s.id,qi,q:s.part===1?"":(q.q||""),scene:q.scene||"",c:q.c,a:q.a,ex:q.ex,t:q.t||(s.part>=3?POSL[qi]:""),clueText:s.part>=3&&s.lines&&s.lines[q.clue]?s.lines[q.clue].t:"",pick:LL.picks[qi]==null?null:LL.picks[qi]});});
     S.lcType=S.lcType||{};if(s.part<=2)s.qs.forEach((q,i)=>{const t=q.t||"기타";S.lcType[t]=S.lcType[t]||{n:0,c:0};S.lcType[t].n++;S.lcType[t].c+=LL.picks[i]===q.a?1:0;});
@@ -1817,6 +1979,7 @@ function progressSummary(){
     `남은 오답 ${wnActive().length}개 (오늘 복습 ${wnDue().length}개)` + (Object.keys(cats).length?` (유형별: ${Object.entries(cats).map(([k,v])=>k+" "+v).join(", ")})`:""),
     `틀린 원인 기록: ${Object.keys(rsn).length?Object.entries(rsn).map(([k,v])=>k+" "+v).join(", "):"아직 없음"}`,
     `실수 체크리스트: ${(S.checklist||[]).join(" / ")||"없음"}`,
+    `분석 요약: ${anSummaryText()}`,
     `단어: 아는 단어 ${known}개, 몰라요 ${weak.length}개${weak.length?" → "+weak.slice(0,30).join(", "):""}`,
     `모의고사: 1회 LC ${m["1lc"]||"-"} / RC ${m["1rc"]||"-"}, 2회 LC ${m["2lc"]||"-"} / RC ${m["2rc"]||"-"} (각 100문제 중 정답 수)`,
     `앱 기록: LC ${[1,2,3,4].map(p=>{const x=(S.lc||{})['p'+p];return 'P'+p+' '+(x?x.c+'/'+x.n:'-');}).join(', ')} · RC ${[6,7].map(p=>{const x=(S.rcSt||{})['p'+p];return 'P'+p+' '+(x?x.c+'/'+x.n:'-');}).join(', ')}`,
@@ -1884,6 +2047,7 @@ function ctxChips(){
   if(tab==="voca")return ["'몰라요' 단어로 예문 만들어줘"];
   if(tab==="wrong")return ["오답 패턴 분석해줘"];
   if(tab==="tips")return ["시험 당일 시간 배분 다시 정리해줘"];
+  if(tab==="stats")return ["이 분석 보고 내일 전략 짜줘","가장 점수 올리기 쉬운 파트는?"];
   return ["오늘 뭐부터 하면 돼?","내가 자주 틀리는 유형으로 문제 10개 만들어줘"];
 }
 (function mountPanel(){
@@ -1989,6 +2153,7 @@ $("#main").addEventListener("click",e=>{
     return;}
   if(e.target.closest("[data-act='wnp5']")){const list=wnDue().filter(x=>x.kind==="p5").map(x=>({id:x.qid,q:x.q,c:x.c,a:x.a,cat:x.t,ex:x.ex}));RS=null;S.rcPart=5;tab="p5";try{history.replaceState(null,"","#p5");}catch(_){}startP5(list);window.scrollTo({top:0});return;}
   if(e.target.closest("[data-act='wnai']")){runWnAI();return;}
+  if(e.target.closest("[data-act='anai']")){runAnAI();return;}
   if(e.target.closest("[data-act='ghsync']")){gistSync(true);return;}
   if(e.target.closest("[data-act='ghoff']")){try{localStorage.removeItem(GH_TOK);localStorage.removeItem(GH_GIST);}catch(_){}gh.state="off";gh.at=0;ghMsg="이 기기에서 동기화를 껐어요. GitHub에 저장된 기록은 그대로 있어요.";render();return;}
   const chip=e.target.closest("[data-chip]");if(chip){sendChat(chip.dataset.chip);return;}
