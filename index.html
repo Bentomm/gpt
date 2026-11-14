@@ -780,11 +780,17 @@ let P=null; // {list,idx,picked,start,res:[],timer}
 function timedSec(){return S.timedP5||20;}
 function startP5(list,opts){P={list,idx:0,picked:null,start:Date.now(),res:[],limit:(opts&&opts.limit!=null)?opts.limit:(S.timedOn?timedSec():0)};tick();render();}
 function timedBox(rp){
-  const on=!!S.timedOn,sec=timedSec();
+  const on=!!S.timedOn;
+  const cfg={5:{key:"timedP5",def:20,opts:[15,20,25,30],unit:"문제당",fmt:v=>v+"초",desc:"실전 권장: 문제당 약 20초 (30문제 10~11분)"},
+    6:{key:"tP6",def:120,opts:[90,120,150],unit:"세트당",fmt:v=>fmtSec(v),desc:"실전 권장: 세트당 약 2분 (4세트 8분)"},
+    7:{key:"tP7",def:60,opts:[50,60,75],unit:"문제당",fmt:v=>v+"초",desc:"실전 권장: 문제당 약 1분. 지문 2~3개 세트는 문제당 20초를 더 줘요"},
+    v:{key:"timedV",def:8,opts:[5,8,10],unit:"단어당",fmt:v=>v+"초",desc:"실전에서는 보자마자 떠올라야 해요"}}[rp];
+  const cur=S[cfg.key]||cfg.def;
   return `<section class="sheet timedbox"><div class="row" style="justify-content:space-between;flex-wrap:nowrap">
-      <div><h3>시간 제한 모드</h3><p class="note" style="margin:2px 0 0">${rp===5?`켜면 [다음]을 안 눌러도 세션이 자동으로 진행돼요. 문제당 ${sec}초, 답을 고르면 정답/오답만 잠깐 보여주고 넘어가요. 해설은 끝나고 리뷰에서. 단어 퀴즈도 단어당 8초로 자동 진행돼요.`:"켜면 세트 목표 시간이 끝나는 순간 자동으로 채점해요."}</p></div>
+      <div><h3>시간 제한 모드</h3><p class="note" style="margin:2px 0 0">${rp===5||rp==="v"?"켜면 [다음]을 안 눌러도 자동으로 진행돼요. 답을 고르거나 시간이 끝나면 정답/오답만 잠깐 보여주고 넘어가요. 해설은 끝나고 리뷰에서.":"켜면 시간이 끝나는 순간 자동으로 채점해요."} (스위치는 모든 파트 공통)</p></div>
       <button type="button" class="switch" role="switch" aria-checked="${on}" aria-label="시간 제한 모드" data-act="timedtoggle"><i></i></button></div>
-    ${rp===5?`<div class="row" style="margin-top:10px"><span class="note">문제당</span><div class="seg">${[15,20,30].map(v=>`<button data-tsec="${v}" aria-pressed="${sec===v}">${v}초</button>`).join("")}</div></div>`:""}
+    <div class="row" style="margin-top:10px"><span class="note">${cfg.unit}</span><div class="seg">${cfg.opts.map(v=>`<button data-tset="${cfg.key}:${v}" aria-pressed="${cur===v}">${cfg.fmt(v)}</button>`).join("")}</div></div>
+    <p class="note" style="margin:6px 0 0">${cfg.desc}</p>
   </section>`;
 }
 function tick(){clearInterval(window._t);window._t=setInterval(()=>{if(!P||P.picked!=null||P.idx>=P.list.length)return;const s=Math.floor((Date.now()-P.start)/1000);if(P.limit&&s>=P.limit&&tab==="p5"){answer(-1);return;}const el=$("#qtimer");if(!el)return;el.textContent=P.limit?(P.limit-s)+"초 남음":s+"초";el.classList.toggle("slow",P.limit?P.limit-s<=5:s>20);},300);}
@@ -984,9 +990,9 @@ function startV(){
   const ws=allWords();
   const weak=shuffle(ws.filter(w=>S.words[w.w]==="weak")),unseen=shuffle(ws.filter(w=>!S.words[w.w])),known=shuffle(ws.filter(w=>S.words[w.w]==="known"));
   const list=weak.slice(0,4).concat(unseen).concat(weak.slice(4)).concat(known).slice(0,10);
-  V={list,idx:0,picked:null,res:[],start:Date.now(),limit:S.timedOn?8:0};mkOpts();vtick();render();
+  V={list,idx:0,picked:null,res:[],start:Date.now(),limit:S.timedOn?(S.timedV||8):0};mkOpts();vtick();render();
 }
-function startVList(list){if(!list.length)return;V={list:shuffle(list),idx:0,picked:null,res:[],start:Date.now(),limit:S.timedOn?8:0};mkOpts();vtick();render();window.scrollTo({top:0});}
+function startVList(list){if(!list.length)return;V={list:shuffle(list),idx:0,picked:null,res:[],start:Date.now(),limit:S.timedOn?(S.timedV||8):0};mkOpts();vtick();render();window.scrollTo({top:0});}
 function vtick(){clearInterval(window._vt);window._vt=setInterval(()=>{if(!V||V.picked!=null||V.idx>=V.list.length)return;const t=Math.floor((Date.now()-V.start)/1000);
   if(V.limit&&t>=V.limit&&tab==="voca"){vAnswer(-2);return;}const el=$("#vtimer");if(el){el.textContent=V.limit?(V.limit-t)+"초 남음":t+"초";el.classList.toggle("slow",V.limit?V.limit-t<=3:t>8);}},300);}
 function vNext(){clearTimeout(window._vauto);V.idx++;V.picked=null;V.auto=false;V.start=Date.now();mkOpts();render();}
@@ -1006,6 +1012,7 @@ function rVoca(){
       <div class="row"><button class="btn print" data-act="vstart">퀴즈 시작</button></div>
       <p class="note" style="margin:12px 0 0"><span class="dot known"></span> 아는 단어 <span class="num">${cnt.known}</span> · <span class="dot weak"></span> 몰라요 <span class="num">${cnt.weak}</span> · 안 본 단어 <span class="num">${ws.length-cnt.known-cnt.weak}</span></p>
     </section>
+    ${timedBox("v")}
     ${vocaStats()}
     <section class="sheet">
       <div class="row" style="justify-content:space-between"><h3>단어장</h3>
@@ -1643,7 +1650,7 @@ function tipFrom(list,t){const x=list.find(([re])=>re.test(t||""));return x?x[1]
 const allRC=()=>RC_SETS.concat(S.genRC||[]);
 let RS=null,rcGen={busy:false,msg:""};
 function nextRC(part){const seen=S.rcSeen||{},sets=allRC().filter(s=>s.part===part),u=sets.filter(s=>!seen[s.id]);return (u.length?u:shuffle(sets))[0];}
-function rcTarget(s){return s.part===6?120:(s.docs.length>1?80:60)*s.qs.length;}
+function rcTarget(s){return s.part===6?(S.tP6||120):((S.tP7||60)+(s.docs.length>1?20:0))*s.qs.length;}
 function fmtSec(t){t=Math.max(0,Math.round(t));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0");}
 function startRC(s){if(!s)return;clearInterval(window._rct);RS={set:s,picks:new Array(s.qs.length).fill(null),start:Date.now(),phase:"solve",limitOn:!!S.timedOn};render();window.scrollTo({top:0});
   window._rct=setInterval(()=>{if(!RS||RS.phase!=="solve")return;const t=(Date.now()-RS.start)/1000,tg=rcTarget(RS.set);
@@ -2264,9 +2271,9 @@ $("#main").addEventListener("click",e=>{
   if(e.target.closest("[data-act='vretry']")&&V){startVList(V.res.filter(r=>!r.ok).map(r=>r.w));return;}
   if(e.target.closest("[data-act='vhard']")){const hw=new Set(Object.entries(S.wst||{}).filter(([w,s])=>s.miss>=1).sort((a,b)=>b[1].miss-a[1].miss).slice(0,10).map(([w])=>w));startVList(allWords().filter(x=>hw.has(x.w)));return;}
   if(e.target.closest("[data-act='vai']")&&V){const ws=V.res.filter(r=>!r.ok).map(r=>r.w.w+" ("+r.w.m+")").join(", ");openChat();sendChat(`방금 단어 퀴즈에서 틀린 단어야: ${ws}\n단어마다 토익에 나올 법한 짧은 예문(해석 포함)과 헷갈리지 않게 외우는 요령을 한 줄씩 알려줘.`);return;}
-  if(e.target.closest("[data-act='vlimit']")&&V&&V.picked==null){V.limit=V.limit?0:8;V.start=Date.now();render();return;}
+  if(e.target.closest("[data-act='vlimit']")&&V&&V.picked==null){V.limit=V.limit?0:(S.timedV||8);V.start=Date.now();render();return;}
   if(e.target.closest("[data-act='timedtoggle']")){S.timedOn=!S.timedOn;save();render();return;}
-  const tsb=e.target.closest("[data-tsec]");if(tsb){S.timedP5=+tsb.dataset.tsec;save();render();return;}
+  const tsb=e.target.closest("[data-tset]");if(tsb){const [k,v]=tsb.dataset.tset.split(":");S[k]=+v;save();render();return;}
   if(e.target.closest("[data-act='p5limit']")&&P&&P.picked==null){P.limit=P.limit?0:timedSec();P.start=Date.now();render();return;}
   if(e.target.closest("[data-act='rclimit']")&&RS&&RS.phase==="solve"){RS.limitOn=!RS.limitOn;if(RS.limitOn&&(Date.now()-RS.start)/1000>=rcTarget(RS.set)-10)RS.start=Date.now()-Math.max(0,(rcTarget(RS.set)-60))*1000;render();return;}
   const acb=e.target.closest("[data-acc]");if(acb){S.accentMode=acb.dataset.acc;save();render();return;}
