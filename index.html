@@ -683,7 +683,7 @@ if(STANDALONE&&ghTok()){setTimeout(()=>gistSync(true),300);window.addEventListen
   const ref=db.doc("progress/main");
   try{
     const snap=await ref.get();docRef=ref;
-    if(snap.exists){S=Object.assign(fresh(),snap.data());try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}render();}
+    if(snap.exists){S=Object.assign(fresh(),JSON.parse(JSON.stringify(snap.data()||{})));try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}render();}
     else save();
   }catch(e){}
 })();
