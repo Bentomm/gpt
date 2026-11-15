@@ -192,6 +192,7 @@ details.tbl summary{cursor:pointer;font-size:13px;color:var(--primary);font-weig
 .chart .line{fill:none;stroke:var(--primary);stroke-width:2}
 .chart .dot{fill:var(--primary);stroke:var(--surface);stroke-width:2}
 .insight{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-size:15px}
+#errtoast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;padding:12px 14px;border-radius:12px;background:var(--bad);color:#fff;font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 /* timed mode */
 .switch{position:relative;flex:0 0 51px;width:51px;height:31px;border:none;border-radius:999px;background:var(--line);padding:0;transition:background .2s}
 .switch i{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
@@ -2314,13 +2315,30 @@ $("#main").addEventListener("click",e=>{
 });
 
 
-/* iOS 웹뷰에서 탭이 클릭으로 안 바뀌는 경우 대비: 터치 후 클릭이 안 오면 직접 클릭 */
-(function(){let pend=null;
-  document.addEventListener("pointerup",e=>{if(e.pointerType!=="touch")return;const el=e.target.closest&&e.target.closest("button,label");if(!el||el.disabled)return;
-    clearTimeout(pend);pend=setTimeout(()=>{pend=null;if(document.body.contains(el)&&!el.disabled)el.click();},420);},true);
-  document.addEventListener("click",()=>{if(pend){clearTimeout(pend);pend=null;}},true);
-  document.addEventListener("pointercancel",()=>{if(pend){clearTimeout(pend);pend=null;}},true);
+/* 터치: 손가락을 떼는 순간 바로 누른 것으로 처리 (iOS 웹뷰에서 click이 안 오는 경우 대비), 뒤따르는 진짜 click은 중복이면 무시 */
+(function(){
+  let down=null,tapEl=null,tapTs=0;
+  const target=t=>t&&t.closest?t.closest("button,label,a[href]"):null;
+  document.addEventListener("pointerdown",e=>{if(e.pointerType!=="touch"){down=null;return;}down={x:e.clientX,y:e.clientY,t:Date.now(),el:target(e.target)};},true);
+  document.addEventListener("pointercancel",()=>{down=null;},true);
+  document.addEventListener("pointerup",e=>{
+    if(e.pointerType!=="touch"||!down)return;const d=down;down=null;
+    const el=target(e.target);if(!el||el!==d.el||el.disabled)return;
+    if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>12||Date.now()-d.t>900)return;
+    if(el.tagName==="A")return;
+    tapEl=el;tapTs=Date.now();
+    try{el.click();}catch(err){showErr(err);}
+  },true);
+  document.addEventListener("click",e=>{
+    if(!e.isTrusted)return;
+    const el=target(e.target);
+    if(Date.now()-tapTs<800&&(el===tapEl||!document.body.contains(tapEl))){e.stopPropagation();e.preventDefault();}
+  },true);
 })();
+function showErr(err){try{let t=document.getElementById("errtoast");if(!t){t=document.createElement("div");t.id="errtoast";document.body.appendChild(t);}
+  t.textContent="앱 오류: "+String((err&&err.message)||err).slice(0,160)+" (이 화면을 캡처해서 보내주세요)";t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>{t.hidden=true;},9000);}catch(_){}}
+window.addEventListener("error",e=>showErr(e.error||e.message));
+window.addEventListener("unhandledrejection",e=>{const r=e.reason;if(r&&r.code)return;showErr(r);});
 render();
 </script>
 
